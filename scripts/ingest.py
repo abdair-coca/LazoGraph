@@ -29,9 +29,9 @@ sys.path.insert(0, str(SKILL_DIR))
 
 from adapters import detect_adapter
 
-DATASETS_ROOT = Path(os.environ.get(
-    'OPENPERSONA_DATASETS',
-    Path.home() / '.openpersona' / 'datasets'
+KNOWLEDGE_ROOT = Path(os.environ.get(
+    'OPENPERSONA_KNOWLEDGE',
+    Path.home() / '.openpersona' / 'knowledge'
 ))
 
 # PII patterns (conservative — flag, don't block)
@@ -56,10 +56,10 @@ def main():
 
     args = parser.parse_args()
 
-    dataset_dir = DATASETS_ROOT / args.slug
+    dataset_dir = KNOWLEDGE_ROOT / args.slug
     if not dataset_dir.exists():
         print(f'❌ Dataset not found: {dataset_dir}', file=sys.stderr)
-        print(f'   Run: python scripts/init_dataset.py --slug {args.slug} --name "..."', file=sys.stderr)
+        print(f'   Run: python scripts/init_knowledge.py --slug {args.slug} --name "..."', file=sys.stderr)
         sys.exit(1)
 
     # --- Resolve adapter ---
