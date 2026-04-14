@@ -58,7 +58,7 @@ def main():
 def lint_wiki(wiki_dir: Path, dataset_dir: Path, *, fix_links: bool = False) -> dict:
     pages = {}
     for md in wiki_dir.glob('*.md'):
-        pages[md.stem] = md.read_text()
+        pages[md.stem] = md.read_text(encoding='utf-8')
 
     issues = []
     warnings = []
