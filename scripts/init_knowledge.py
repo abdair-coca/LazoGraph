@@ -104,7 +104,8 @@ def init_dataset(slug: str, name: str) -> Path:
 def init_mempalace(palace_dir: Path, slug: str):
     """Initialize MemPalace with wing + halls for the persona."""
     try:
-        from mempalace import MemPalace
+        from mempalace.palace import get_collection
+        from mempalace.knowledge_graph import KnowledgeGraph
     except ImportError:
         print('⚠️  mempalace not installed — creating directory structure only.', file=sys.stderr)
         print('   Install: pip install mempalace', file=sys.stderr)
@@ -112,24 +113,19 @@ def init_mempalace(palace_dir: Path, slug: str):
         _write_mempalace_stub(palace_dir, slug)
         return
 
-    palace_path = str(palace_dir / 'palace')
-    mp = MemPalace(palace_path=palace_path)
-
-    wing_id = mp.create_wing(slug, f'Persona dataset: {slug}')
-    print(f'   MemPalace wing: {wing_id}')
-
-    for hall_name, hall_desc in HALLS:
-        hall_id = mp.create_hall(wing_id, hall_name, hall_desc)
-        print(f'   MemPalace hall: {hall_name} → {hall_id}')
+    palace_path = palace_dir / 'palace'
+    palace_path.mkdir(parents=True, exist_ok=True)
+    get_collection(str(palace_path), create=True)
+    print(f'   MemPalace collection: initialized ({palace_path})')
 
     # Initialize Knowledge Graph
+    kg_path = palace_path / 'knowledge_graph.sqlite3'
+    kg = KnowledgeGraph(db_path=str(kg_path))
     try:
-        from mempalace.knowledge_graph import KnowledgeGraph
-        kg = KnowledgeGraph(palace_path=palace_path)
-        kg.create_entity(slug, entity_type='persona', metadata={'name': slug})
+        kg.add_entity(slug, entity_type='persona', properties={'name': slug})
         print(f'   Knowledge Graph: initialized (root entity: {slug})')
-    except (ImportError, AttributeError):
-        print('   Knowledge Graph: skipped (requires mempalace >= 3.1.0)', file=sys.stderr)
+    finally:
+        kg.close()
 
 
 def _write_mempalace_stub(palace_dir: Path, slug: str):

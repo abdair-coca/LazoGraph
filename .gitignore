@@ -8,6 +8,23 @@ __pycache__/
 *.egg-info/
 .venv/
 
+# Private persona data and local end-to-end artifacts
+/.openpersona/
+/.test-data/
+/data/
+/imports/
+/exports/
+/training/
+/training-*/
+/demo.txt
+/whatsapp-*-normalized.txt
+**/.mempalace/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
 # OS
 .DS_Store
 Thumbs.db

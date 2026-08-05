@@ -112,14 +112,18 @@ def main():
         _report_dry_run(new_messages, adapter_name, pii_flags)
         return
 
-    # --- Write sources/ backup ---
-    source_filename = _write_sources_backup(dataset_dir, new_messages, adapter_name, args.source, pii_flags)
-
     # --- Store in MemPalace ---
     _store_in_mempalace(dataset_dir, args.slug, new_messages)
 
     # --- Extract KG triples ---
     kg_stats = _extract_kg_triples(dataset_dir, new_messages)
+
+    # Write the dedup source backup only after both storage layers succeed.
+    # MemPalace upserts and KG triples are idempotent, so a failed run can be
+    # retried without incorrectly marking unstored messages as duplicates.
+    source_filename = _write_sources_backup(
+        dataset_dir, new_messages, adapter_name, args.source, pii_flags
+    )
 
     # --- Update dataset.json stats ---
     _update_stats(dataset_dir, new_messages, kg_stats)
@@ -273,37 +277,52 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
     palace_dir = dataset_dir / '.mempalace' / 'palace'
 
     try:
-        from mempalace import MemPalace
-    except ImportError:
-        print('   ⚠️  mempalace not installed — skipping vector storage', file=sys.stderr)
-        return 0
+        from mempalace.palace import get_collection
+    except ImportError as e:
+        raise RuntimeError(
+            'mempalace is required for ingestion; install it with: pip install mempalace'
+        ) from e
 
     try:
-        mp = MemPalace(palace_path=str(palace_dir))
+        palace_dir.mkdir(parents=True, exist_ok=True)
+        collection = get_collection(str(palace_dir), create=True)
     except Exception as e:
-        print(f'   ⚠️  MemPalace init failed: {e} — skipping', file=sys.stderr)
-        return 0
+        raise RuntimeError(f'MemPalace initialization failed: {e}') from e
 
     stored = 0
-    for msg in messages:
-        source_type = msg.get('source_type', msg.get('metadata', {}).get('type', ''))
-        hall = HALL_ROUTING.get(source_type, 'hall_voice')
-
+    batch_size = 128
+    for batch_start in range(0, len(messages), batch_size):
+        batch = messages[batch_start:batch_start + batch_size]
+        documents = []
+        ids = []
+        metadatas = []
+        for msg in batch:
+            source_type = msg.get('source_type', msg.get('metadata', {}).get('type', ''))
+            hall = HALL_ROUTING.get(source_type, 'hall_voice')
+            documents.append(msg['content'])
+            ids.append(f'{slug}-{_content_hash(msg)}')
+            metadata = {
+                'wing': slug,
+                'room': source_type or 'general',
+                'hall': hall,
+                'role': msg['role'],
+                'source_file': msg.get('source_file') or '',
+                'source_type': source_type or '',
+            }
+            if msg.get('timestamp'):
+                metadata['authored_at'] = msg['timestamp']
+            metadatas.append(metadata)
         try:
-            mp.store(
-                content=msg['content'],
-                wing=slug,
-                hall=hall,
-                metadata={
-                    'role': msg['role'],
-                    'timestamp': msg.get('timestamp'),
-                    'source_file': msg.get('source_file'),
-                    'source_type': source_type,
-                }
+            collection.upsert(
+                documents=documents,
+                ids=ids,
+                metadatas=metadatas,
             )
-            stored += 1
+            stored += len(batch)
         except Exception as e:
-            print(f'   ⚠️  MemPalace store failed: {e}', file=sys.stderr)
+            raise RuntimeError(
+                f'MemPalace storage failed after {stored}/{len(messages)} messages: {e}'
+            ) from e
 
     print(f'   MemPalace: {stored}/{len(messages)} stored')
     return stored
@@ -382,28 +401,25 @@ def _write_kg(palace_dir: Path, entities: set[str], relationships: list[dict]):
     """Write extracted entities/relationships to the Knowledge Graph."""
     try:
         from mempalace.knowledge_graph import KnowledgeGraph
-        kg = KnowledgeGraph(palace_path=str(palace_dir))
+        palace_dir.mkdir(parents=True, exist_ok=True)
+        kg = KnowledgeGraph(db_path=str(palace_dir / 'knowledge_graph.sqlite3'))
 
-        for entity in entities:
-            try:
-                kg.create_entity(entity, entity_type='person')
-            except Exception:
-                pass
+        try:
+            for entity in entities:
+                kg.add_entity(entity, entity_type='person')
 
-        for rel in relationships:
-            try:
-                kg.create_relationship(
-                    from_entity=rel['from'],
-                    to_entity=rel.get('to', ''),
-                    relationship_type=rel['type'],
-                    metadata={
-                        'timestamp': rel.get('timestamp'),
-                        'source': rel.get('source'),
-                        'confidence': rel.get('confidence', 'extracted'),
-                    },
+            for rel in relationships:
+                kg.add_triple(
+                    subject=rel['from'],
+                    predicate=rel['type'],
+                    obj=rel.get('to', ''),
+                    valid_from=rel.get('timestamp'),
+                    confidence=1.0,
+                    source_file=rel.get('source'),
+                    adapter_name='persona-knowledge',
                 )
-            except Exception:
-                pass
+        finally:
+            kg.close()
 
     except ImportError:
         # Store as fallback JSON

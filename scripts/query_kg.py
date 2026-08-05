@@ -62,22 +62,34 @@ def _load_kg(dataset_dir: Path) -> tuple[set[str], list[dict]]:
 
     try:
         from mempalace.knowledge_graph import KnowledgeGraph
-        kg = KnowledgeGraph(palace_path=str(palace_dir))
+        kg = KnowledgeGraph(db_path=str(palace_dir / 'knowledge_graph.sqlite3'))
 
         all_entities = set()
         all_rels = []
 
         try:
-            result = kg.query_entity(dataset_dir.name)
-            if isinstance(result, dict):
+            stats = kg.stats()
+            if stats.get('entities', 0):
                 all_entities.add(dataset_dir.name)
-                for rel in result.get('relationships', []):
-                    other = rel.get('entity', rel.get('from', rel.get('to', '')))
-                    if other:
-                        all_entities.add(other)
-                    all_rels.append(rel)
-        except Exception:
-            pass
+            result = kg.query_entity(dataset_dir.name, direction='both')
+            if isinstance(result, list):
+                for rel in result:
+                    source = rel.get('subject', '')
+                    target = rel.get('object', '')
+                    if source:
+                        all_entities.add(source)
+                    if target:
+                        all_entities.add(target)
+                    all_rels.append({
+                        'from': source,
+                        'to': target,
+                        'type': rel.get('predicate', ''),
+                        'confidence': rel.get('confidence'),
+                        'source': rel.get('source_closet') or '',
+                        'timestamp': rel.get('valid_from'),
+                    })
+        finally:
+            kg.close()
 
         if all_entities:
             return all_entities, all_rels
