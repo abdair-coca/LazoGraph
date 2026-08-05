@@ -53,6 +53,11 @@ def main():
     parser.add_argument('--since', help='Only ingest data after this date (ISO 8601)')
     parser.add_argument('--entity', help='Entity name for GBrain JSON export')
     parser.add_argument('--dry-run', action='store_true', help='Parse and report without writing')
+    parser.add_argument(
+        '--rebuild-kg',
+        action='store_true',
+        help='Rebuild Knowledge Graph from stored sources without re-ingesting',
+    )
 
     args = parser.parse_args()
 
@@ -61,6 +66,20 @@ def main():
         print(f'❌ Dataset not found: {dataset_dir}', file=sys.stderr)
         print(f'   Run: python scripts/init_knowledge.py --slug {args.slug} --name "..."', file=sys.stderr)
         sys.exit(1)
+
+    if args.rebuild_kg:
+        messages = _load_stored_messages(dataset_dir)
+        if not messages:
+            print('⚠️  No stored messages available for KG rebuild.')
+            return
+        print(f'🔄 Rebuilding Knowledge Graph from {len(messages)} stored messages...')
+        kg_stats = _extract_kg_triples(dataset_dir, messages)
+        _set_kg_stats(dataset_dir, kg_stats)
+        print(
+            f'✅ Knowledge Graph rebuilt: {kg_stats["entities"]} entities, '
+            f'{kg_stats["relationships"]} relationships'
+        )
+        return
 
     # --- Resolve adapter ---
     adapter_name = args.adapter
@@ -133,7 +152,7 @@ def main():
     print(f'\n✅ {source_filename} → {len(new_messages)} messages ({assistant_turns} assistant turns)')
     pii_str = ', '.join(sorted(pii_flags)) if pii_flags else 'none detected'
     print(f'   PII: {pii_str}')
-    print(f'   KG: +{kg_stats["entities"]} entities, +{kg_stats["relationships"]} relationships')
+    print(f'   KG: {kg_stats["entities"]} entities, {kg_stats["relationships"]} relationships')
     print(f'   → sources/{source_filename}')
 
 
@@ -180,6 +199,25 @@ def _load_existing_hashes(dataset_dir: Path) -> set[str]:
             except (json.JSONDecodeError, KeyError):
                 continue
     return hashes
+
+
+def _load_stored_messages(dataset_dir: Path) -> list[dict]:
+    """Load unique source-backup messages for non-destructive rebuilds."""
+    messages = []
+    seen = set()
+    for jsonl_file in sorted((dataset_dir / 'sources').glob('*.jsonl')):
+        with jsonl_file.open(encoding='utf-8') as source:
+            for line in source:
+                try:
+                    message = json.loads(line)
+                    content_hash = _content_hash(message)
+                except (json.JSONDecodeError, KeyError):
+                    continue
+                if content_hash in seen:
+                    continue
+                seen.add(content_hash)
+                messages.append(message)
+    return messages
 
 
 def dedup_messages(messages: list[dict], existing_hashes: set[str]) -> tuple[list[dict], int]:
@@ -330,31 +368,26 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
 
 # --- Knowledge Graph extraction ---
 
-# Simple entity/relationship patterns for automatic extraction
+# Simple multilingual entity/relationship patterns for automatic extraction
+_NAME_TOKEN = r'[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+'
+_PERSON_NAME = rf'{_NAME_TOKEN}(?:\s+{_NAME_TOKEN})?'
 _PERSON_PATTERN = re.compile(
-    r'\b(?:[Mm]y (?:friend|brother|sister|mom|dad|mother|father|wife|husband|partner|boss|colleague|coworker)|'
-    r'(?:with|told|asked|met|called|texted|emailed)\s+)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b'
+    rf'\b(?:'
+    rf'[Mm]y\s+(?:friend|brother|sister|mom|dad|mother|father|wife|husband|partner|boss|colleague|coworker)|'
+    rf'[Mm]i\s+(?:amig[oa]|herman[oa]|mamá|madre|papá|padre|espos[oa]|pareja|jef[ea]|colega|compañer[oa](?:\s+de\s+trabajo)?)|'
+    rf'(?:with|told|asked|met|called|texted|emailed)|'
+    rf'(?:con|(?:le\s+)?dije\s+a|pregunté\s+a|conocí\s+a|llamé\s+a|escribí\s+a|hablé\s+con|mensajeé\s+a)'
+    rf')\s+({_PERSON_NAME})\b'
 )
 
-_RELATIONSHIP_KEYWORDS = {
-    'friend': 'friend_of',
-    'brother': 'sibling_of',
-    'sister': 'sibling_of',
-    'mom': 'parent_of',
-    'mother': 'parent_of',
-    'dad': 'parent_of',
-    'father': 'parent_of',
-    'wife': 'spouse_of',
-    'husband': 'spouse_of',
-    'partner': 'partner_of',
-    'boss': 'reports_to',
-    'colleague': 'colleague_of',
-    'coworker': 'colleague_of',
-}
-
-_RELATIONSHIP_PATTERNS = tuple(
-    (re.compile(rf'\b[Mm]y\s+{kw}\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b'), rel)
-    for kw, rel in _RELATIONSHIP_KEYWORDS.items()
+_RELATIONSHIP_PATTERNS = (
+    (re.compile(rf'\b(?:[Mm]y\s+friend|[Mm]i\s+amig[oa])\s+({_PERSON_NAME})\b'), 'friend_of'),
+    (re.compile(rf'\b(?:[Mm]y\s+(?:brother|sister)|[Mm]i\s+herman[oa])\s+({_PERSON_NAME})\b'), 'sibling_of'),
+    (re.compile(rf'\b(?:[Mm]y\s+(?:mom|dad|mother|father)|[Mm]i\s+(?:mamá|madre|papá|padre))\s+({_PERSON_NAME})\b'), 'parent_of'),
+    (re.compile(rf'\b(?:[Mm]y\s+(?:wife|husband)|[Mm]i\s+espos[oa])\s+({_PERSON_NAME})\b'), 'spouse_of'),
+    (re.compile(rf'\b(?:[Mm]y\s+partner|[Mm]i\s+pareja)\s+({_PERSON_NAME})\b'), 'partner_of'),
+    (re.compile(rf'\b(?:[Mm]y\s+boss|[Mm]i\s+jef[ea])\s+({_PERSON_NAME})\b'), 'reports_to'),
+    (re.compile(rf'\b(?:[Mm]y\s+(?:colleague|coworker)|[Mm]i\s+(?:colega|compañer[oa](?:\s+de\s+trabajo)?))\s+({_PERSON_NAME})\b'), 'colleague_of'),
 )
 
 
@@ -362,9 +395,28 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
     """Extract entities and relationships from message content."""
     slug = dataset_dir.name
     entities = set()
-    relationships = []
+    relationships_by_key = {}
+
+    def add_relationship(name: str, rel_type: str, msg: dict):
+        name = name.strip()
+        if not name or name.casefold() == slug.casefold():
+            return
+        entities.add(name)
+        key = (name.casefold(), slug.casefold(), rel_type)
+        relationships_by_key.setdefault(key, {
+            'from': name,
+            'to': slug,
+            'type': rel_type,
+            'confidence': 'extracted',
+            'timestamp': msg.get('timestamp'),
+            'source': msg.get('source_file'),
+        })
 
     for msg in messages:
+        sender = str(msg.get('metadata', {}).get('sender', '')).strip()
+        if sender and msg['role'] != 'assistant':
+            add_relationship(sender, 'communicates_with', msg)
+
         if msg['role'] != 'assistant':
             continue
 
@@ -373,28 +425,23 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
         for pattern, rel_type in _RELATIONSHIP_PATTERNS:
             for match in pattern.finditer(content):
                 name = match.group(1)
-                entities.add(name)
-                relationships.append({
-                    'from': name,
-                    'to': slug,
-                    'type': rel_type,
-                    'confidence': 'extracted',
-                    'timestamp': msg.get('timestamp'),
-                    'source': msg.get('source_file'),
-                })
+                add_relationship(name, rel_type, msg)
 
         # General person mentions
         for match in _PERSON_PATTERN.finditer(content):
             entities.add(match.group(1))
 
+    relationships = list(relationships_by_key.values())
+
     # Write to KG if available
     palace_dir = dataset_dir / '.mempalace' / 'palace'
-    _write_kg(palace_dir, entities, relationships)
+    persisted_stats = _write_kg(palace_dir, entities, relationships)
 
-    return {
+    extracted_stats = {
         'entities': len(entities),
         'relationships': len(relationships),
     }
+    return persisted_stats if isinstance(persisted_stats, dict) else extracted_stats
 
 
 def _write_kg(palace_dir: Path, entities: set[str], relationships: list[dict]):
@@ -413,11 +460,16 @@ def _write_kg(palace_dir: Path, entities: set[str], relationships: list[dict]):
                     subject=rel['from'],
                     predicate=rel['type'],
                     obj=rel.get('to', ''),
-                    valid_from=rel.get('timestamp'),
+                    valid_from=_kg_valid_from(rel.get('timestamp')),
                     confidence=1.0,
                     source_file=rel.get('source'),
                     adapter_name='persona-knowledge',
                 )
+            stats = kg.stats()
+            return {
+                'entities': stats.get('entities', len(entities)),
+                'relationships': stats.get('triples', len(relationships)),
+            }
         finally:
             kg.close()
 
@@ -437,6 +489,18 @@ def _write_kg(palace_dir: Path, entities: set[str], relationships: list[dict]):
             pending.append({'_entry': 'relationship', **rel})
 
         kg_file.write_text(json.dumps(pending, indent=2, ensure_ascii=False) + '\n')
+        return {
+            'entities': len(entities),
+            'relationships': len(relationships),
+        }
+
+
+def _kg_valid_from(timestamp: str | None) -> str | None:
+    """Use date precision when a source timestamp has no trustworthy timezone."""
+    if not timestamp:
+        return None
+    match = re.match(r'^(\d{4}-\d{2}-\d{2})', str(timestamp))
+    return match.group(1) if match else None
 
 
 # --- Stats update ---
@@ -454,9 +518,23 @@ def _update_stats(dataset_dir: Path, messages: list[dict], kg_stats: dict):
     stats['assistant_turns'] = stats.get('assistant_turns', 0) + sum(
         1 for m in messages if m['role'] == 'assistant'
     )
-    stats['kg_entities'] = stats.get('kg_entities', 0) + kg_stats['entities']
-    stats['kg_relationships'] = stats.get('kg_relationships', 0) + kg_stats['relationships']
+    stats['kg_entities'] = kg_stats['entities']
+    stats['kg_relationships'] = kg_stats['relationships']
 
+    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + '\n')
+
+
+def _set_kg_stats(dataset_dir: Path, kg_stats: dict):
+    """Replace KG counters after an idempotent full rebuild."""
+    meta_path = dataset_dir / 'dataset.json'
+    try:
+        meta = json.loads(meta_path.read_text(encoding='utf-8'))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return
+
+    stats = meta.setdefault('stats', {})
+    stats['kg_entities'] = kg_stats['entities']
+    stats['kg_relationships'] = kg_stats['relationships']
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + '\n')
 
 

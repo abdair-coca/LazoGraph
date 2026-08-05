@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression tests for the MemPalace 3.x integration surface."""
 
+import json
 import sys
 import tempfile
 import types
@@ -120,6 +121,7 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(kg.entities[0][:2], ('Alice', 'person'))
         self.assertEqual(kg.triples[0]['subject'], 'Alice')
         self.assertEqual(kg.triples[0]['predicate'], 'friend_of')
+        self.assertEqual(kg.triples[0]['valid_from'], '2026-08-05')
         self.assertTrue(kg.closed)
 
     def test_vector_failure_stops_before_dedup_backup(self):
@@ -149,12 +151,13 @@ class TestMemPalaceCompatibility(unittest.TestCase):
             'current': True,
         }]
         with patch.dict(sys.modules, self.fake.modules):
-            entities, relationships = query_kg._load_kg(self.dataset)
+            entities, relationships, native_stats = query_kg._load_kg(self.dataset)
 
         self.assertEqual(entities, {'Alice', 'sam'})
         self.assertEqual(relationships[0]['from'], 'Alice')
         self.assertEqual(relationships[0]['to'], 'sam')
         self.assertEqual(relationships[0]['type'], 'friend_of')
+        self.assertEqual(native_stats, {'entities': 1, 'triples': 0})
 
     def test_initializer_uses_current_api(self):
         palace_dir = self.dataset / '.mempalace'
@@ -164,6 +167,91 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         kg = FakeKnowledgeGraph.instances[0]
         self.assertEqual(kg.entities[0], ('sam', 'persona', {'name': 'sam'}))
         self.assertTrue(kg.closed)
+
+    def test_spanish_relationships_and_chat_participants_are_extracted(self):
+        messages = [
+            {
+                'role': 'assistant',
+                'content': 'Mi amiga Carla vino. Después hablé con Diego.',
+                'timestamp': '2026-08-05T12:00:00',
+                'source_file': 'chat.txt',
+                'source_type': 'whatsapp',
+                'metadata': {'sender': 'Abdair'},
+            },
+            {
+                'role': 'user',
+                'content': 'Respuesta uno.',
+                'timestamp': '2026-08-05T12:01:00',
+                'source_file': 'chat.txt',
+                'source_type': 'whatsapp',
+                'metadata': {'sender': 'Alizon'},
+            },
+            {
+                'role': 'user',
+                'content': 'Respuesta dos.',
+                'timestamp': '2026-08-05T12:02:00',
+                'source_file': 'chat.txt',
+                'source_type': 'whatsapp',
+                'metadata': {'sender': 'Alizon'},
+            },
+        ]
+
+        with patch.object(ingest, '_write_kg') as write_kg:
+            stats = ingest._extract_kg_triples(self.dataset, messages)
+
+        entities = write_kg.call_args.args[1]
+        relationships = write_kg.call_args.args[2]
+        relationship_keys = {
+            (rel['from'], rel['to'], rel['type']) for rel in relationships
+        }
+
+        self.assertEqual(stats, {'entities': 3, 'relationships': 2})
+        self.assertEqual(entities, {'Alizon', 'Carla', 'Diego'})
+        self.assertIn(('Alizon', 'sam', 'communicates_with'), relationship_keys)
+        self.assertIn(('Carla', 'sam', 'friend_of'), relationship_keys)
+
+    def test_stored_messages_are_loaded_uniquely_for_kg_rebuild(self):
+        sources = self.dataset / 'sources'
+        sources.mkdir()
+        message = {
+            'role': 'user',
+            'content': 'Mensaje repetido.',
+            'timestamp': None,
+            'source_file': 'chat.txt',
+            'source_type': 'whatsapp',
+            'metadata': {'sender': 'Alizon'},
+        }
+        line = json.dumps(message, ensure_ascii=False) + '\n'
+        (sources / 'one.jsonl').write_text(line, encoding='utf-8')
+        (sources / 'two.jsonl').write_text(line, encoding='utf-8')
+
+        messages = ingest._load_stored_messages(self.dataset)
+
+        self.assertEqual(messages, [message])
+
+    def test_rebuild_replaces_kg_stats_without_changing_message_counts(self):
+        metadata = {
+            'stats': {
+                'sources': 1,
+                'total_messages': 3627,
+                'assistant_turns': 2113,
+                'kg_entities': 0,
+                'kg_relationships': 0,
+            }
+        }
+        metadata_path = self.dataset / 'dataset.json'
+        metadata_path.write_text(json.dumps(metadata), encoding='utf-8')
+
+        ingest._set_kg_stats(
+            self.dataset,
+            {'entities': 3, 'relationships': 1},
+        )
+
+        updated = json.loads(metadata_path.read_text(encoding='utf-8'))['stats']
+        self.assertEqual(updated['total_messages'], 3627)
+        self.assertEqual(updated['assistant_turns'], 2113)
+        self.assertEqual(updated['kg_entities'], 3)
+        self.assertEqual(updated['kg_relationships'], 1)
 
 
 if __name__ == '__main__':

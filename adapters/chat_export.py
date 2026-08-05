@@ -33,52 +33,131 @@ def parse(source_path: str, *, persona_name: str = '', since: str | None = None,
 
 # --- WhatsApp ---
 
-_WA_PATTERN = re.compile(
-    r'^(\d{1,2}/\d{1,2}/\d{2,4},?\s*\d{1,2}:\d{2}(?::\d{2})?\s*[AP]?M?)\s*-\s*([^:]+):\s*(.*)',
-    re.MULTILINE
+_WA_DATE = r'\d{1,2}/\d{1,2}/\d{2,4}'
+_WA_TIME = r'\d{1,2}:\d{2}(?::\d{2})?'
+_WA_MERIDIEM = r'(?:[AaPp](?:\s*\.\s*[Mm]\.?)?|[AaPp][Mm])?'
+_WA_TIMESTAMP = rf'{_WA_DATE},?\s*{_WA_TIME}\s*{_WA_MERIDIEM}'
+_WA_ANDROID_HEADER = re.compile(
+    rf'^[\ufeff\u200e\u200f]*(?P<timestamp>{_WA_TIMESTAMP})\s*-\s*(?P<body>.*)$'
 )
+_WA_IOS_HEADER = re.compile(
+    rf'^[\ufeff\u200e\u200f]*\[(?P<timestamp>{_WA_TIMESTAMP})\]\s*(?P<body>.*)$'
+)
+_WA_MEDIA_OMITTED = {
+    '<media omitted>',
+    '<multimedia omitido>',
+    'imagen omitida',
+    'video omitido',
+    'audio omitido',
+    'sticker omitido',
+}
+
+
+def _match_whatsapp_header(line: str):
+    """Return a WhatsApp header match for Android or iOS exports."""
+    return _WA_ANDROID_HEADER.match(line) or _WA_IOS_HEADER.match(line)
+
+
+def looks_like_whatsapp(text: str) -> bool:
+    """Detect a WhatsApp export without assuming English timestamp spacing."""
+    for line in text.splitlines():
+        match = _match_whatsapp_header(line)
+        if match and ':' in match.group('body'):
+            sender, _, _ = match.group('body').partition(':')
+            if sender.strip():
+                return True
+    return False
 
 
 def _parse_whatsapp(path: Path, *, persona_name: str) -> list[dict]:
-    text = path.read_text(errors='replace')
+    text = path.read_text(encoding='utf-8-sig', errors='replace')
     messages = []
     persona_lower = persona_name.lower().strip()
+    current = None
 
-    for match in _WA_PATTERN.finditer(text):
-        ts_raw, sender, content = match.group(1), match.group(2).strip(), match.group(3).strip()
-        if not content or content == '<Media omitted>':
+    def flush_current():
+        nonlocal current
+        if current is None:
+            return
+
+        content = '\n'.join(current.pop('content_lines')).strip()
+        if content and content.casefold() not in _WA_MEDIA_OMITTED:
+            current['content'] = content
+            messages.append(current)
+        current = None
+
+    for line in text.splitlines():
+        match = _match_whatsapp_header(line)
+        if match:
+            flush_current()
+            body = match.group('body')
+            sender, separator, content = body.partition(':')
+
+            # Timestamped system notices have no sender separator. They end
+            # the previous multiline message but are not persona messages.
+            if not separator or not sender.strip():
+                continue
+
+            sender = sender.strip()
+            is_persona = bool(persona_lower and persona_lower in sender.lower())
+            current = {
+                'role': 'assistant' if is_persona else 'user',
+                'content_lines': [content.strip()],
+                'timestamp': _normalize_wa_ts(match.group('timestamp')),
+                'source_file': path.name,
+                'source_type': 'whatsapp',
+                'metadata': {'sender': sender},
+            }
             continue
 
-        is_persona = (
-            persona_lower and persona_lower in sender.lower()
-        ) if persona_name else False
+        if current is not None:
+            current['content_lines'].append(line)
 
-        messages.append({
-            'role': 'assistant' if is_persona else 'user',
-            'content': content,
-            'timestamp': _normalize_wa_ts(ts_raw),
-            'source_file': path.name,
-            'source_type': 'whatsapp',
-            'metadata': {'sender': sender},
-        })
-
+    flush_current()
     return messages
 
-
 def _normalize_wa_ts(raw: str) -> str:
-    for fmt in (
-        '%m/%d/%y, %I:%M %p',
-        '%m/%d/%Y, %I:%M %p',
-        '%m/%d/%y, %H:%M',
-        '%d/%m/%y, %H:%M',
-        '%d/%m/%Y, %H:%M',
-    ):
+    localized_meridiem = bool(re.search(r'(?i)[ap]\s*\.\s*m\.?', raw))
+    cleaned = raw.translate(str.maketrans({
+        '\u00a0': ' ',
+        '\u202f': ' ',
+        '\u200e': None,
+        '\u200f': None,
+        '\ufeff': None,
+    }))
+    cleaned = re.sub(
+        r'(?i)([ap])\s*\.\s*m\.?',
+        lambda match: f'{match.group(1).upper()}M',
+        cleaned,
+    )
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+    date_part = cleaned.split(',', 1)[0].split(' ', 1)[0]
+    try:
+        first_date_number = int(date_part.split('/', 1)[0])
+    except (ValueError, IndexError):
+        first_date_number = 0
+
+    day_first = localized_meridiem or first_date_number > 12
+    date_orders = ('%d/%m', '%m/%d') if day_first else ('%m/%d', '%d/%m')
+    formats = []
+    for date_order in date_orders:
+        for year in ('%y', '%Y'):
+            for separator in (', ', ' '):
+                formats.extend((
+                    f'{date_order}/{year}{separator}%I:%M %p',
+                    f'{date_order}/{year}{separator}%I:%M:%S %p',
+                    f'{date_order}/{year}{separator}%H:%M',
+                    f'{date_order}/{year}{separator}%H:%M:%S',
+                ))
+
+    for fmt in formats:
         try:
             from datetime import datetime
-            return datetime.strptime(raw.strip(), fmt).isoformat()
+            return datetime.strptime(cleaned, fmt).isoformat()
         except ValueError:
             continue
-    return raw
+    return cleaned
 
 
 # --- Telegram ---

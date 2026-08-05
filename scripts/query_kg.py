@@ -40,7 +40,7 @@ def main():
         print(f'Dataset not found: {dataset_dir}', file=sys.stderr)
         sys.exit(1)
 
-    entities, relationships = _load_kg(dataset_dir)
+    entities, relationships, native_stats = _load_kg(dataset_dir)
 
     if not entities and not relationships:
         print('Knowledge Graph is empty. Ingest data first.', file=sys.stderr)
@@ -51,12 +51,17 @@ def main():
     elif args.path:
         _query_path(args.path[0], args.path[1], entities, relationships, as_json=args.json)
     elif args.stats:
-        _query_stats(entities, relationships, as_json=args.json)
+        _query_stats(
+            entities,
+            relationships,
+            as_json=args.json,
+            native_stats=native_stats,
+        )
     else:
         parser.print_help()
 
 
-def _load_kg(dataset_dir: Path) -> tuple[set[str], list[dict]]:
+def _load_kg(dataset_dir: Path) -> tuple[set[str], list[dict], dict | None]:
     """Load entities and relationships from MemPalace KG or fallback JSON."""
     palace_dir = dataset_dir / '.mempalace' / 'palace'
 
@@ -92,11 +97,12 @@ def _load_kg(dataset_dir: Path) -> tuple[set[str], list[dict]]:
             kg.close()
 
         if all_entities:
-            return all_entities, all_rels
+            return all_entities, all_rels, stats
     except (ImportError, Exception):
         pass
 
-    return _load_kg_fallback(dataset_dir)
+    entities, relationships = _load_kg_fallback(dataset_dir)
+    return entities, relationships, None
 
 
 def _load_kg_fallback(dataset_dir: Path) -> tuple[set[str], list[dict]]:
@@ -236,7 +242,13 @@ def _find_edge(relationships: list[dict], a: str, b: str) -> dict | None:
     return None
 
 
-def _query_stats(entities: set[str], relationships: list[dict], *, as_json: bool):
+def _query_stats(
+    entities: set[str],
+    relationships: list[dict],
+    *,
+    as_json: bool,
+    native_stats: dict | None = None,
+):
     type_counts = defaultdict(int)
     confidence_counts = defaultdict(int)
     for rel in relationships:
@@ -244,8 +256,8 @@ def _query_stats(entities: set[str], relationships: list[dict], *, as_json: bool
         confidence_counts[rel.get('confidence', 'untagged')] += 1
 
     stats = {
-        'entities': len(entities),
-        'relationships': len(relationships),
+        'entities': native_stats.get('entities', len(entities)) if native_stats else len(entities),
+        'relationships': native_stats.get('triples', len(relationships)) if native_stats else len(relationships),
         'relationship_types': dict(type_counts),
         'confidence_distribution': dict(confidence_counts),
     }
@@ -254,8 +266,8 @@ def _query_stats(entities: set[str], relationships: list[dict], *, as_json: bool
         print(json.dumps(stats, indent=2, ensure_ascii=False))
         return
 
-    print(f'Entities: {len(entities)}')
-    print(f'Relationships: {len(relationships)}')
+    print(f'Entities: {stats["entities"]}')
+    print(f'Relationships: {stats["relationships"]}')
     if type_counts:
         print(f'\nRelationship types:')
         for rtype, count in sorted(type_counts.items(), key=lambda x: -x[1]):

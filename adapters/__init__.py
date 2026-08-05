@@ -53,9 +53,10 @@ def detect_adapter(source_path: str) -> str | None:
 
     if suffix == '.txt':
         try:
-            head = p.read_text(errors='replace')[:1024]
-            import re
-            if re.search(r'\d+/\d+/\d+,\s*\d+:\d+\s*[AP]?M?\s*-\s*.+:', head):
+            from .chat_export import looks_like_whatsapp
+
+            head = p.read_text(encoding='utf-8-sig', errors='replace')[:4096]
+            if looks_like_whatsapp(head):
                 return 'chat_export'
         except OSError:
             pass
