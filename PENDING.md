@@ -10,9 +10,12 @@
   malformed KG entities. The WhatsApp parser now recognizes notices even when they contain
   a colon, and the shared ingestion boundary rejects known notices plus structurally invalid
   sender names before they can reach deduplication, vectors, participant profiles, or the KG.
-- [ ] Detect equivalent source backups before ingestion. The direct export (3614 messages)
+- [x] Detect equivalent source backups before ingestion. The direct export (3614 messages)
   and an older normalized export (3627 lines) produced a 3663-message union instead of
-  being recognized as two representations of the same chat.
+  being recognized as two representations of the same chat. Ingestion now compares normalized
+  content overlap against every active backup and stops before all writes when a large source
+  has at least 95% overlap and a similar size. Small sources require an exact match; intentional
+  imports can use `--allow-equivalent-source`. No automatic quarantine is performed yet.
 - [ ] Add dataset-wide invariants after every write: active-source unique messages must equal
   dataset stats, participant totals, vector count, and export source snapshot. The mismatch
   was only found after KG reconstruction.

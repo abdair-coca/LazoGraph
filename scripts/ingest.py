@@ -21,6 +21,7 @@ import os
 import re
 import sqlite3
 import sys
+import unicodedata
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,6 +47,10 @@ PII_PATTERNS = [
     (re.compile(r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'), 'phone'),
 ]
 
+SOURCE_EQUIVALENCE_MIN_MESSAGES = 20
+SOURCE_EQUIVALENCE_MIN_OVERLAP = 0.95
+SOURCE_EQUIVALENCE_MIN_SIZE_RATIO = 0.90
+
 
 def main():
     parser = argparse.ArgumentParser(description='Ingest data into a persona dataset')
@@ -56,6 +61,11 @@ def main():
     parser.add_argument('--since', help='Only ingest data after this date (ISO 8601)')
     parser.add_argument('--entity', help='Entity name for GBrain JSON export')
     parser.add_argument('--dry-run', action='store_true', help='Parse and report without writing')
+    parser.add_argument(
+        '--allow-equivalent-source',
+        action='store_true',
+        help='Ingest even when an equivalent active source backup is detected',
+    )
     parser.add_argument(
         '--rebuild-kg',
         action='store_true',
@@ -139,6 +149,21 @@ def main():
     print(f'   Parsed: {len(messages)} messages')
     if rejected_notices:
         print(f'   Rejected: {rejected_notices} invalid chat system notices')
+
+    equivalent_sources = _find_equivalent_sources(dataset_dir, messages)
+    if equivalent_sources:
+        print('   ⚠️  Equivalent active source detected:')
+        for match in equivalent_sources:
+            print(
+                f'      - {match["filename"]}: {match["overlap"]}/{match["smaller"]} '
+                f'messages overlap ({match["coverage"]:.1%}), '
+                f'size ratio {match["size_ratio"]:.1%}'
+            )
+        if not args.allow_equivalent_source:
+            print('   Ingestion stopped before writing any data.')
+            print('   Review active backups or pass --allow-equivalent-source to continue intentionally.')
+            sys.exit(2)
+        print('   Override accepted: continuing without reconciling existing backups.')
 
     # --- PII scan ---
     pii_flags = scan_pii(messages)
@@ -288,6 +313,73 @@ def dedup_messages(messages: list[dict], existing_hashes: set[str]) -> tuple[lis
         new_messages.append(msg)
 
     return new_messages, dup_count
+
+
+def _equivalence_fingerprint(message: dict) -> str:
+    """Hash message text independent of adapter role/metadata representation."""
+    content = unicodedata.normalize('NFKC', str(message.get('content', '')))
+    normalized = re.sub(r'\s+', ' ', content).strip().casefold()
+    return hashlib.sha256(normalized.encode('utf-8')).hexdigest() if normalized else ''
+
+
+def _equivalence_counter(messages: list[dict]) -> Counter:
+    """Build a content multiset after removing exact role/content duplicates."""
+    unique_messages, _ = dedup_messages(messages, set())
+    fingerprints = (_equivalence_fingerprint(message) for message in unique_messages)
+    return Counter(fingerprint for fingerprint in fingerprints if fingerprint)
+
+
+def _read_source_messages(source_path: Path) -> list[dict]:
+    messages = []
+    with source_path.open(encoding='utf-8') as source:
+        for line in source:
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(message, dict) and message.get('content'):
+                messages.append(message)
+    return messages
+
+
+def _find_equivalent_sources(dataset_dir: Path, messages: list[dict]) -> list[dict]:
+    """Find active backups representing substantially the same message collection."""
+    candidate = _equivalence_counter(messages)
+    candidate_count = sum(candidate.values())
+    if not candidate_count:
+        return []
+
+    matches = []
+    for source_path in sorted((dataset_dir / 'sources').glob('*.jsonl')):
+        existing = _equivalence_counter(_read_source_messages(source_path))
+        existing_count = sum(existing.values())
+        if not existing_count:
+            continue
+
+        overlap = sum((candidate & existing).values())
+        smaller = min(candidate_count, existing_count)
+        larger = max(candidate_count, existing_count)
+        coverage = overlap / smaller
+        size_ratio = smaller / larger
+
+        if smaller < SOURCE_EQUIVALENCE_MIN_MESSAGES:
+            equivalent = candidate == existing
+        else:
+            equivalent = (
+                coverage >= SOURCE_EQUIVALENCE_MIN_OVERLAP
+                and size_ratio >= SOURCE_EQUIVALENCE_MIN_SIZE_RATIO
+            )
+        if equivalent:
+            matches.append({
+                'filename': source_path.name,
+                'candidate_messages': candidate_count,
+                'existing_messages': existing_count,
+                'overlap': overlap,
+                'smaller': smaller,
+                'coverage': coverage,
+                'size_ratio': size_ratio,
+            })
+    return matches
 
 
 # --- Sources backup ---
