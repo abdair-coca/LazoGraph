@@ -17,10 +17,12 @@ import argparse
 import difflib
 import hashlib
 import json
+import math
 import os
 import re
 import sqlite3
 import sys
+import time
 import unicodedata
 from collections import Counter
 from datetime import datetime, timezone
@@ -130,7 +132,12 @@ def main():
         print(f'🔄 Rebuilding MemPalace from {len(messages)} stored messages...')
         removed = _prune_mempalace(dataset_dir, args.slug, messages)
         print(f'   Pruned: {removed} stale vectors')
-        stored = _store_in_mempalace(dataset_dir, args.slug, messages)
+        stored = _store_in_mempalace(
+            dataset_dir,
+            args.slug,
+            messages,
+            show_progress=True,
+        )
         _write_participant_profiles(dataset_dir, messages)
         invariants_ok = print_invariant_report(validate_dataset(dataset_dir))
         print(f'✅ MemPalace rebuilt: {stored} messages with participant metadata')
@@ -499,7 +506,12 @@ def _run_equivalent_source_reconciliation(
 
     authoritative_messages = _load_stored_messages(dataset_dir)
     removed_vectors = _prune_mempalace(dataset_dir, slug, authoritative_messages)
-    stored_vectors = _store_in_mempalace(dataset_dir, slug, authoritative_messages)
+    stored_vectors = _store_in_mempalace(
+        dataset_dir,
+        slug,
+        authoritative_messages,
+        show_progress=True,
+    )
     cleared_relationships = _clear_managed_kg(dataset_dir)
     pruned_entities = _prune_invalid_kg_entities(dataset_dir)
     kg_stats = _extract_kg_triples(dataset_dir, authoritative_messages)
@@ -605,7 +617,14 @@ HALL_ROUTING = {
 }
 
 
-def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> int:
+def _store_in_mempalace(
+    dataset_dir: Path,
+    slug: str,
+    messages: list[dict],
+    *,
+    show_progress: bool = False,
+    clock=None,
+) -> int:
     palace_dir = dataset_dir / '.mempalace' / 'palace'
 
     try:
@@ -623,6 +642,8 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
 
     stored = 0
     batch_size = 128
+    clock = clock or time.monotonic
+    started_at = clock() if show_progress else None
     for batch_start in range(0, len(messages), batch_size):
         batch = messages[batch_start:batch_start + batch_size]
         documents = []
@@ -639,6 +660,12 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
                 metadatas=metadatas,
             )
             stored += len(batch)
+            if show_progress:
+                elapsed = max(clock() - started_at, 0.0)
+                print(
+                    f'   MemPalace: {_format_vector_progress(stored, len(messages), elapsed)}',
+                    flush=True,
+                )
         except Exception as e:
             raise RuntimeError(
                 f'MemPalace storage failed after {stored}/{len(messages)} messages: {e}'
@@ -646,6 +673,31 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
 
     print(f'   MemPalace: {stored}/{len(messages)} stored')
     return stored
+
+
+def _format_duration(seconds: float | None) -> str:
+    if seconds is None or not math.isfinite(seconds):
+        return '--:--'
+    total_seconds = max(0, math.ceil(seconds))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, remaining_seconds = divmod(remainder, 60)
+    if hours:
+        return f'{hours:02d}:{minutes:02d}:{remaining_seconds:02d}'
+    return f'{minutes:02d}:{remaining_seconds:02d}'
+
+
+def _format_vector_progress(stored: int, total: int, elapsed: float) -> str:
+    percentage = (stored / total * 100) if total else 100.0
+    if stored >= total:
+        eta = 0.0
+    elif stored and elapsed > 0:
+        eta = (total - stored) / (stored / elapsed)
+    else:
+        eta = None
+    return (
+        f'{stored}/{total} ({percentage:.1f}%) | '
+        f'elapsed {_format_duration(elapsed)} | ETA {_format_duration(eta)}'
+    )
 
 
 def _vector_id(slug: str, message: dict) -> str:

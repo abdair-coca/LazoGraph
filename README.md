@@ -135,6 +135,7 @@ python scripts/ingest.py --slug sam --migrate-vector-metadata
 
 This path updates metadata only; embeddings remain unchanged. If vector IDs differ
 from authoritative sources, the command stops and requires `--rebuild-vectors`.
+Full vector rebuilds print progress, elapsed time, and ETA after every 128-message batch.
 
 ### 7. End-to-end verification
 

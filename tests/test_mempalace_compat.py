@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Regression tests for the MemPalace 3.x integration surface."""
 
+import io
 import json
 import sqlite3
 import sys
 import tempfile
 import types
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -172,6 +174,52 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(upsert['metadatas'][0]['wing'], 'sam')
         self.assertEqual(upsert['metadatas'][0]['hall'], 'hall_voice')
         self.assertEqual(upsert['metadatas'][0]['sender'], '')
+
+    def test_vector_progress_formats_percentage_elapsed_and_eta(self):
+        line = ingest._format_vector_progress(256, 1024, 8.0)
+
+        self.assertEqual(
+            line,
+            '256/1024 (25.0%) | elapsed 00:08 | ETA 00:24',
+        )
+
+    def test_vector_rebuild_reports_every_batch_with_simulated_clock(self):
+        messages = [
+            {
+                'role': 'assistant',
+                'content': f'Memory {index}.',
+                'source_type': 'whatsapp',
+                'metadata': {'sender': 'Sam'},
+            }
+            for index in range(257)
+        ]
+        clock_values = iter([0.0, 4.0, 8.0, 10.0])
+        output = io.StringIO()
+
+        with patch.dict(sys.modules, self.fake.modules), redirect_stdout(output):
+            stored = ingest._store_in_mempalace(
+                self.dataset,
+                'sam',
+                messages,
+                show_progress=True,
+                clock=lambda: next(clock_values),
+            )
+
+        self.assertEqual(stored, 257)
+        progress = [
+            line.strip()
+            for line in output.getvalue().splitlines()
+            if '| elapsed ' in line
+        ]
+        self.assertEqual(len(progress), 3)
+        self.assertEqual(
+            progress[0],
+            'MemPalace: 128/257 (49.8%) | elapsed 00:04 | ETA 00:05',
+        )
+        self.assertEqual(
+            progress[-1],
+            'MemPalace: 257/257 (100.0%) | elapsed 00:10 | ETA 00:00',
+        )
 
     def test_vector_metadata_migration_never_submits_documents_or_embeddings(self):
         message = {

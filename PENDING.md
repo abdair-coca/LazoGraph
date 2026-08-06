@@ -35,8 +35,10 @@
   metadata through Chroma `update(ids=..., metadatas=...)`, verifies persisted fields, and
   never submits documents or embeddings. ID drift aborts safely and requests `--rebuild-vectors`;
   `--dry-run` reports required changes without writing.
-- [ ] Show batch progress and estimated remaining time during vector rebuild. Long CPU work
-  currently appears inactive between start and completion.
+- [x] Show batch progress and estimated remaining time during vector rebuild. Rebuild and
+  equivalent-source replacement now print flushed status after every 128-message batch:
+  stored/total, percentage, elapsed time, and ETA derived from measured average throughput.
+  Zero-duration and completed batches remain deterministic and avoid division errors.
 - [ ] Make KG/vector/wiki rebuild an optional atomic transaction with rollback. Current layers
   are individually recoverable, but interruption between them can temporarily leave counts
   inconsistent.
