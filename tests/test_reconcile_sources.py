@@ -90,6 +90,17 @@ class TestReconcileSources(unittest.TestCase):
         self.assertEqual(source_index['files'], [{'filename': 'official.jsonl'}])
         self.assertEqual(len(source_index['quarantine_history']), 1)
 
+    def test_apply_with_no_candidates_is_safe_no_op(self):
+        self.sources.joinpath('duplicate.jsonl').unlink()
+
+        result = reconcile_sources.reconcile_sources(
+            self.dataset, 'official.jsonl', apply=True
+        )
+
+        self.assertEqual(result['quarantined'], [])
+        self.assertIsNone(result['quarantine_dir'])
+        self.assertTrue(self.sources.joinpath('official.jsonl').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

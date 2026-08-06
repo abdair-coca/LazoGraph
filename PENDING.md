@@ -23,8 +23,12 @@
   and newly generated export metadata. Ingestion and rebuilds fail loudly on divergence;
   initialization, staged reconciliation, and legacy export flows report without destructive
   repair. Older exports that predate source changes are labeled stale instead of corrupt.
-- [ ] Make source reconciliation an automatic preflight with a confirmation report, instead
+- [x] Make source reconciliation an automatic preflight with a confirmation report, instead
   of requiring a separate repair after duplicate backups already affect profiles/KG/vectors.
+  Equivalent ingestion now prints the exact replacement plan and writes nothing by default.
+  `--reconcile-equivalent-source` explicitly confirms selective, recoverable quarantine; the
+  incoming source becomes authoritative, then stale vectors, participant profiles, managed KG,
+  counters, source index, and invariants are rebuilt. `--dry-run` previews the full plan safely.
 - [ ] Add a metadata-only vector migration. Adding `sender` currently re-embeds all 3614
   messages and takes roughly 2–4 minutes even when document text and embeddings are unchanged.
 - [ ] Show batch progress and estimated remaining time during vector rebuild. Long CPU work

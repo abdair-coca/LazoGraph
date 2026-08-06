@@ -121,6 +121,59 @@ class TestSourceEquivalence(unittest.TestCase):
         store.assert_not_called()
         self.assertEqual(list(self.sources.glob('*.jsonl')), [self.sources / 'official.jsonl'])
 
+    def test_cli_confirmation_dispatches_reconciliation(self):
+        existing = [self._message(index) for index in range(25)]
+        self._write_jsonl(self.sources / 'official.jsonl', existing)
+        argv = [
+            'ingest.py',
+            '--slug', 'sam',
+            '--source', str(self.root / 'candidate.jsonl'),
+            '--adapter', 'universal',
+            '--persona-name', 'Sam',
+            '--reconcile-equivalent-source',
+        ]
+        with (
+            patch.object(ingest, 'KNOWLEDGE_ROOT', self.root),
+            patch.object(sys, 'argv', argv),
+            patch.object(
+                ingest,
+                '_load_adapter',
+                return_value=SimpleNamespace(parse=lambda *_args, **_kwargs: list(existing)),
+            ),
+            patch.object(ingest, '_run_equivalent_source_reconciliation') as reconcile,
+        ):
+            ingest.main()
+
+        reconcile.assert_called_once()
+        self.assertTrue(self.sources.joinpath('official.jsonl').exists())
+
+    def test_reconciliation_dry_run_never_writes(self):
+        existing = [self._message(index) for index in range(25)]
+        self._write_jsonl(self.sources / 'official.jsonl', existing)
+        argv = [
+            'ingest.py',
+            '--slug', 'sam',
+            '--source', str(self.root / 'candidate.jsonl'),
+            '--adapter', 'universal',
+            '--persona-name', 'Sam',
+            '--reconcile-equivalent-source',
+            '--dry-run',
+        ]
+        with (
+            patch.object(ingest, 'KNOWLEDGE_ROOT', self.root),
+            patch.object(sys, 'argv', argv),
+            patch.object(
+                ingest,
+                '_load_adapter',
+                return_value=SimpleNamespace(parse=lambda *_args, **_kwargs: list(existing)),
+            ),
+            patch.object(ingest, '_run_equivalent_source_reconciliation') as reconcile,
+        ):
+            ingest.main()
+
+        reconcile.assert_not_called()
+        self.assertTrue(self.sources.joinpath('official.jsonl').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

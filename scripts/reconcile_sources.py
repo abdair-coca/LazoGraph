@@ -4,9 +4,7 @@
 import argparse
 import json
 import os
-import shutil
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -15,6 +13,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 import ingest
 from dataset_invariants import print_report as print_invariant_report
 from dataset_invariants import validate_dataset
+from source_reconciliation import quarantine_sources
 
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
@@ -45,8 +44,11 @@ def main():
         print(f'  - {filename}')
     print(f'Unique messages after reconciliation: {result["messages"]}')
     if args.apply:
-        print(f'Quarantine: {result["quarantine_dir"]}')
-        print('Reconciliation applied. Next: rebuild KG, then vectors.')
+        if result['quarantine_dir']:
+            print(f'Quarantine: {result["quarantine_dir"]}')
+            print('Reconciliation applied. Next: rebuild KG, then vectors.')
+        else:
+            print('Nothing to quarantine.')
         print_invariant_report(result['invariants'], strict=False)
     else:
         print('Dry run only. Add --apply to move duplicate backups.')
@@ -70,28 +72,30 @@ def reconcile_sources(dataset_dir: Path, keep: str, *, apply: bool = False) -> d
             'quarantine_dir': None,
         }
 
-    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-    quarantine_dir = sources_dir / 'quarantine' / timestamp
-    quarantine_dir.mkdir(parents=True, exist_ok=False)
-    moved = []
-    for source_path in candidates:
-        destination = quarantine_dir / source_path.name
-        source_path.replace(destination)
-        moved.append(destination.name)
+    if not candidates:
+        messages = ingest._load_stored_messages(dataset_dir)
+        ingest._write_participant_profiles(dataset_dir, messages)
+        _reconcile_dataset_stats(dataset_dir, messages)
+        return {
+            'kept': keep,
+            'quarantined': [],
+            'messages': len(messages),
+            'quarantine_dir': None,
+            'invariants': validate_dataset(dataset_dir),
+        }
 
-    _reconcile_source_index(sources_dir, keep, moved, quarantine_dir, timestamp)
+    quarantine = quarantine_sources(
+        dataset_dir,
+        [path.name for path in candidates],
+        kept=keep,
+        reason='manual-source-reconciliation',
+    )
+    quarantine_dir = Path(quarantine['quarantine_dir'])
+    moved = quarantine['quarantined']
     messages = ingest._load_stored_messages(dataset_dir)
     ingest._write_participant_profiles(dataset_dir, messages)
     _reconcile_dataset_stats(dataset_dir, messages)
     invariants = validate_dataset(dataset_dir)
-    (quarantine_dir / 'reconciliation.json').write_text(
-        json.dumps({
-            'applied_at': datetime.now(timezone.utc).isoformat(),
-            'kept': keep,
-            'quarantined': moved,
-        }, indent=2, ensure_ascii=False) + '\n',
-        encoding='utf-8',
-    )
     return {
         'kept': keep,
         'quarantined': moved,
@@ -116,32 +120,6 @@ def _load_unique_from_files(paths: list[Path]) -> list[dict]:
                     seen.add(key)
                     messages.append(message)
     return messages
-
-
-def _reconcile_source_index(
-    sources_dir: Path,
-    keep: str,
-    moved: list[str],
-    quarantine_dir: Path,
-    timestamp: str,
-):
-    index_path = sources_dir / '.source-index.json'
-    if not index_path.exists():
-        return
-    backup_path = quarantine_dir / f'source-index-{timestamp}.json'
-    shutil.copy2(index_path, backup_path)
-    try:
-        index = json.loads(index_path.read_text(encoding='utf-8'))
-    except json.JSONDecodeError:
-        return
-    index['files'] = [entry for entry in index.get('files', []) if entry.get('filename') == keep]
-    index.setdefault('quarantine_history', []).append({
-        'at': datetime.now(timezone.utc).isoformat(),
-        'files': moved,
-        'location': str(quarantine_dir),
-    })
-    index['last_updated'] = datetime.now(timezone.utc).isoformat()
-    index_path.write_text(json.dumps(index, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
 
 
 def _reconcile_dataset_stats(dataset_dir: Path, messages: list[dict]):

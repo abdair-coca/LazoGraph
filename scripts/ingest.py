@@ -34,6 +34,7 @@ sys.path.insert(0, str(SKILL_DIR))
 from adapters import detect_adapter
 from dataset_invariants import print_report as print_invariant_report
 from dataset_invariants import validate_dataset
+from source_reconciliation import quarantine_sources
 
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
@@ -63,10 +64,16 @@ def main():
     parser.add_argument('--since', help='Only ingest data after this date (ISO 8601)')
     parser.add_argument('--entity', help='Entity name for GBrain JSON export')
     parser.add_argument('--dry-run', action='store_true', help='Parse and report without writing')
-    parser.add_argument(
+    equivalent_action = parser.add_mutually_exclusive_group()
+    equivalent_action.add_argument(
         '--allow-equivalent-source',
         action='store_true',
         help='Ingest even when an equivalent active source backup is detected',
+    )
+    equivalent_action.add_argument(
+        '--reconcile-equivalent-source',
+        action='store_true',
+        help='Confirm replacement of equivalent active backups using recoverable quarantine',
     )
     parser.add_argument(
         '--rebuild-kg',
@@ -159,6 +166,7 @@ def main():
         print(f'   Rejected: {rejected_notices} invalid chat system notices')
 
     equivalent_sources = _find_equivalent_sources(dataset_dir, messages)
+    replacement_matches = []
     if equivalent_sources:
         print('   ⚠️  Equivalent active source detected:')
         for match in equivalent_sources:
@@ -167,11 +175,29 @@ def main():
                 f'messages overlap ({match["coverage"]:.1%}), '
                 f'size ratio {match["size_ratio"]:.1%}'
             )
-        if not args.allow_equivalent_source:
+        if args.reconcile_equivalent_source:
+            replacement_matches = equivalent_sources
+            print('   Confirmed reconciliation plan:')
+            print('      - quarantine equivalent active backups')
+            print('      - store incoming source as authoritative replacement')
+            print('      - rebuild vectors, participant profiles, and managed KG')
+            if args.dry_run:
+                pii_flags = scan_pii(messages)
+                _report_dry_run(messages, adapter_name, pii_flags)
+                print('   Dry run: reconciliation not applied.')
+                return
+        elif not args.allow_equivalent_source:
             print('   Ingestion stopped before writing any data.')
-            print('   Review active backups or pass --allow-equivalent-source to continue intentionally.')
+            print(
+                '   Pass --reconcile-equivalent-source to confirm safe replacement, '
+                'or --allow-equivalent-source to keep both.'
+            )
             sys.exit(2)
-        print('   Override accepted: continuing without reconciling existing backups.')
+        else:
+            print('   Override accepted: continuing without reconciling existing backups.')
+    elif args.reconcile_equivalent_source:
+        print('   No equivalent active source found; reconciliation not applied.', file=sys.stderr)
+        sys.exit(2)
 
     # --- PII scan ---
     pii_flags = scan_pii(messages)
@@ -179,6 +205,18 @@ def main():
         print(f'   ⚠️  PII detected: {", ".join(sorted(pii_flags))}')
     else:
         print(f'   PII: none detected')
+
+    if replacement_matches:
+        _run_equivalent_source_reconciliation(
+            dataset_dir,
+            args.slug,
+            messages,
+            replacement_matches,
+            adapter_name,
+            args.source,
+            pii_flags,
+        )
+        return
 
     # --- Dedup ---
     existing_hashes = _load_existing_hashes(dataset_dir)
@@ -275,19 +313,26 @@ def _content_hash(msg: dict) -> str:
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
-def _load_existing_hashes(dataset_dir: Path) -> set[str]:
+def _load_existing_hashes(
+    dataset_dir: Path,
+    *,
+    exclude: set[str] | None = None,
+) -> set[str]:
     hashes = set()
     sources_dir = dataset_dir / 'sources'
     for jsonl_file in sources_dir.glob('*.jsonl'):
-        for line in jsonl_file.open(encoding='utf-8'):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-                hashes.add(_content_hash(obj))
-            except (json.JSONDecodeError, KeyError):
-                continue
+        if exclude and jsonl_file.name in exclude:
+            continue
+        with jsonl_file.open(encoding='utf-8') as source:
+            for line in source:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    hashes.add(_content_hash(obj))
+                except (json.JSONDecodeError, KeyError):
+                    continue
     return hashes
 
 
@@ -391,6 +436,69 @@ def _find_equivalent_sources(dataset_dir: Path, messages: list[dict]) -> list[di
                 'size_ratio': size_ratio,
             })
     return matches
+
+
+def _run_equivalent_source_reconciliation(
+    dataset_dir: Path,
+    slug: str,
+    messages: list[dict],
+    matches: list[dict],
+    adapter_name: str,
+    source_path: str | None,
+    pii_flags: set[str],
+) -> dict:
+    """Replace equivalent active backups, then rebuild every affected derived layer."""
+    matched_names = {match['filename'] for match in matches}
+    remaining_hashes = _load_existing_hashes(dataset_dir, exclude=matched_names)
+    replacement_messages, duplicate_count = dedup_messages(messages, remaining_hashes)
+    if not replacement_messages:
+        raise RuntimeError('Replacement source contains no messages unique from retained sources')
+
+    quarantine = quarantine_sources(
+        dataset_dir,
+        sorted(matched_names),
+        reason='equivalent-source-preflight',
+        replacement_source=source_path,
+    )
+    source_filename = _write_sources_backup(
+        dataset_dir,
+        replacement_messages,
+        adapter_name,
+        source_path,
+        pii_flags,
+    )
+
+    authoritative_messages = _load_stored_messages(dataset_dir)
+    removed_vectors = _prune_mempalace(dataset_dir, slug, authoritative_messages)
+    stored_vectors = _store_in_mempalace(dataset_dir, slug, authoritative_messages)
+    cleared_relationships = _clear_managed_kg(dataset_dir)
+    pruned_entities = _prune_invalid_kg_entities(dataset_dir)
+    kg_stats = _extract_kg_triples(dataset_dir, authoritative_messages)
+    _write_participant_profiles(dataset_dir, authoritative_messages)
+    _replace_stats(dataset_dir, authoritative_messages, kg_stats)
+    invariants = validate_dataset(dataset_dir)
+    invariants_ok = print_invariant_report(invariants)
+
+    print('\n✅ Equivalent source reconciliation complete')
+    print(f'   Quarantined: {", ".join(quarantine["quarantined"])}')
+    print(f'   Quarantine: {quarantine["quarantine_dir"]}')
+    print(f'   Replacement: sources/{source_filename}')
+    print(
+        f'   Messages: {len(authoritative_messages)} '
+        f'({duplicate_count} retained-source duplicates skipped)'
+    )
+    print(f'   Vectors: {stored_vectors} stored, {removed_vectors} stale pruned')
+    print(f'   KG: {cleared_relationships} cleared, {pruned_entities} entities pruned')
+    if not invariants_ok:
+        sys.exit(2)
+    return {
+        'quarantine': quarantine,
+        'source_filename': source_filename,
+        'messages': len(authoritative_messages),
+        'vectors': stored_vectors,
+        'kg_stats': kg_stats,
+        'invariants': invariants,
+    }
 
 
 # --- Sources backup ---
@@ -922,6 +1030,23 @@ def _update_stats(dataset_dir: Path, messages: list[dict], kg_stats: dict):
     stats['kg_entities'] = kg_stats['entities']
     stats['kg_relationships'] = kg_stats['relationships']
 
+    meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + '\n')
+
+
+def _replace_stats(dataset_dir: Path, messages: list[dict], kg_stats: dict):
+    """Replace counters after authoritative source reconciliation."""
+    meta_path = dataset_dir / 'dataset.json'
+    try:
+        meta = json.loads(meta_path.read_text(encoding='utf-8'))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return
+
+    stats = meta.setdefault('stats', {})
+    stats['sources'] = len(list((dataset_dir / 'sources').glob('*.jsonl')))
+    stats['total_messages'] = len(messages)
+    stats['assistant_turns'] = sum(message.get('role') == 'assistant' for message in messages)
+    stats['kg_entities'] = kg_stats['entities']
+    stats['kg_relationships'] = kg_stats['relationships']
     meta_path.write_text(json.dumps(meta, indent=2, ensure_ascii=False) + '\n')
 
 
