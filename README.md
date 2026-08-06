@@ -121,10 +121,16 @@ python scripts/lint_wiki.py --slug sam
 python scripts/query_kg.py --slug sam --entity "Tom"
 python scripts/query_kg.py --slug sam --path "Tom" "Alice"
 python scripts/query_kg.py --slug sam --stats
+python scripts/query_memory.py --slug sam --query "work projects" --participant "Sam"
 ```
 
 Participant aliases are stored in private `participants.json` profiles. Repeated
 name variants can resolve to the same canonical person without mixing authorship.
+After upgrading an existing dataset, add sender metadata to its semantic index:
+
+```bash
+python scripts/ingest.py --slug sam --rebuild-vectors
+```
 
 ### 7. End-to-end verification
 

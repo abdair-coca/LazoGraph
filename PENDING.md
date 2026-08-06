@@ -15,3 +15,4 @@ No known pending items from the initial end-to-end test.
 - [x] Build six evidence-backed wiki pages from persona-authored messages only.
 - [x] Export authentic user/assistant dialogue without invented prompts.
 - [x] Add disposable full end-to-end verification from raw source to export.
+- [x] Add participant-filtered semantic search and vector metadata rebuild.

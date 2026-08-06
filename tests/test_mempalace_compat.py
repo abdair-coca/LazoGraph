@@ -16,17 +16,29 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 import ingest
 import init_knowledge
 import query_kg
+import query_memory
 
 
 class FakeCollection:
     def __init__(self):
         self.upserts = []
         self.error = None
+        self.queries = []
+        self.query_result = {
+            'ids': [[]],
+            'documents': [[]],
+            'metadatas': [[]],
+            'distances': [[]],
+        }
 
     def upsert(self, **kwargs):
         if self.error:
             raise self.error
         self.upserts.append(kwargs)
+
+    def query(self, **kwargs):
+        self.queries.append(kwargs)
+        return self.query_result
 
 
 class FakeKnowledgeGraph:
@@ -101,6 +113,42 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(upsert['documents'], ['A durable memory.'])
         self.assertEqual(upsert['metadatas'][0]['wing'], 'sam')
         self.assertEqual(upsert['metadatas'][0]['hall'], 'hall_voice')
+        self.assertEqual(upsert['metadatas'][0]['sender'], '')
+
+    def test_semantic_search_filters_by_canonical_participant(self):
+        self.fake.collection.query_result = {
+            'ids': [['sam-one']],
+            'documents': [['A durable memory.']],
+            'metadatas': [[{'sender': 'Sam Example'}]],
+            'distances': [[0.1]],
+        }
+        with patch.dict(sys.modules, self.fake.modules):
+            results = query_memory.search_memory(
+                self.dataset,
+                'durable',
+                participant='Sam Example',
+                limit=3,
+            )
+
+        query = self.fake.collection.queries[0]
+        self.assertEqual(query['n_results'], 3)
+        self.assertEqual(query['where'], {
+            '$and': [{'wing': 'sam'}, {'sender': 'Sam Example'}]
+        })
+        self.assertEqual(results[0]['content'], 'A durable memory.')
+        self.assertEqual(results[0]['metadata']['sender'], 'Sam Example')
+
+    def test_semantic_participant_alias_resolves_to_canonical_name(self):
+        (self.dataset / 'participants.json').write_text(json.dumps({
+            'participants': [
+                {'name': 'Sam Example', 'aliases': ['Sammy']},
+                {'name': 'Alex', 'aliases': []},
+            ]
+        }), encoding='utf-8')
+
+        resolved = query_memory._resolve_participant(self.dataset, 'Sammy')
+
+        self.assertEqual(resolved, 'Sam Example')
 
     def test_kg_writer_uses_db_path_and_current_methods(self):
         relationships = [{

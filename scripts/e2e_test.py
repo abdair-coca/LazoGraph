@@ -74,6 +74,26 @@ def main():
                 '--path', args.persona_query, args.contact_query,
                 env=env,
             )
+        if args.persona_query:
+            _run(
+                'semantic query persona',
+                'query_memory.py',
+                '--slug', slug,
+                '--query', 'trabajo y proyectos',
+                '--participant', args.persona_query,
+                '--limit', '1',
+                env=env,
+            )
+        if args.contact_query:
+            _run(
+                'semantic query contact',
+                'query_memory.py',
+                '--slug', slug,
+                '--query', 'conversación cotidiana',
+                '--participant', args.contact_query,
+                '--limit', '1',
+                env=env,
+            )
         _run('export', 'export_training.py', '--slug', slug, '--output', str(export_dir), env=env)
 
         summary = _validate(

@@ -61,6 +61,11 @@ def main():
         action='store_true',
         help='Rebuild Knowledge Graph from stored sources without re-ingesting',
     )
+    parser.add_argument(
+        '--rebuild-vectors',
+        action='store_true',
+        help='Rebuild MemPalace vectors and participant metadata from stored sources',
+    )
 
     args = parser.parse_args()
 
@@ -85,6 +90,17 @@ def main():
             f'✅ Knowledge Graph rebuilt: {kg_stats["entities"]} entities, '
             f'{kg_stats["relationships"]} relationships'
         )
+        return
+
+    if args.rebuild_vectors:
+        messages = _load_stored_messages(dataset_dir)
+        if not messages:
+            print('⚠️  No stored messages available for vector rebuild.')
+            return
+        print(f'🔄 Rebuilding MemPalace from {len(messages)} stored messages...')
+        stored = _store_in_mempalace(dataset_dir, args.slug, messages)
+        _write_participant_profiles(dataset_dir, messages)
+        print(f'✅ MemPalace rebuilt: {stored} messages with participant metadata')
         return
 
     # --- Resolve adapter ---
@@ -358,6 +374,7 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
                 'role': msg['role'],
                 'source_file': msg.get('source_file') or '',
                 'source_type': source_type or '',
+                'sender': str(msg.get('metadata', {}).get('sender', '')).strip(),
             }
             if msg.get('timestamp'):
                 metadata['authored_at'] = msg['timestamp']
