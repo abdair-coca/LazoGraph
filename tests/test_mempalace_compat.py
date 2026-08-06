@@ -104,6 +104,30 @@ class TestMemPalaceCompatibility(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_ingestion_boundary_rejects_malformed_system_notice_sender(self):
+        messages = [
+            {
+                'role': 'user',
+                'content': 'False message.',
+                'metadata': {
+                    'sender': (
+                        'Los mensajes y las llamadas están cifrados de extremo a extremo. '
+                        'Solo las personas en este chat pueden leerlos.\n8/8/25, 9'
+                    ),
+                },
+            },
+            {
+                'role': 'assistant',
+                'content': 'Real message.',
+                'metadata': {'sender': 'Abdair'},
+            },
+        ]
+
+        accepted, rejected = ingest._reject_invalid_chat_senders(messages)
+
+        self.assertEqual(rejected, 1)
+        self.assertEqual(accepted, [messages[1]])
+
     def test_vector_storage_uses_collection_upsert(self):
         messages = [{
             'role': 'assistant',

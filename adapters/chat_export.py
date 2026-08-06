@@ -51,11 +51,28 @@ _WA_MEDIA_OMITTED = {
     'audio omitido',
     'sticker omitido',
 }
+_WA_SYSTEM_NOTICE_PREFIXES = (
+    'los mensajes y las llamadas están cifrados',
+    'messages and calls are end-to-end encrypted',
+    'se actualizó la duración de los mensajes',
+    'se actualizaron los mensajes temporales',
+    'se activaron los mensajes temporales',
+    'se desactivaron los mensajes temporales',
+    'disappearing messages were turned on',
+    'disappearing messages were turned off',
+    'you changed the disappearing messages timer',
+)
 
 
 def _match_whatsapp_header(line: str):
     """Return a WhatsApp header match for Android or iOS exports."""
     return _WA_ANDROID_HEADER.match(line) or _WA_IOS_HEADER.match(line)
+
+
+def is_whatsapp_system_notice(text: str) -> bool:
+    """Identify known WhatsApp-generated notices, never human senders."""
+    normalized = re.sub(r'\s+', ' ', text).strip().casefold()
+    return any(normalized.startswith(prefix) for prefix in _WA_SYSTEM_NOTICE_PREFIXES)
 
 
 def looks_like_whatsapp(text: str) -> bool:
@@ -91,6 +108,12 @@ def _parse_whatsapp(path: Path, *, persona_name: str) -> list[dict]:
         if match:
             flush_current()
             body = match.group('body')
+
+            # Some notices contain a colon, so checking only for a sender
+            # separator would incorrectly turn the notice into a participant.
+            if is_whatsapp_system_notice(body):
+                continue
+
             sender, separator, content = body.partition(':')
 
             # Timestamped system notices have no sender separator. They end

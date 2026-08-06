@@ -63,6 +63,17 @@ class TestLocalizedWhatsApp(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0]['timestamp'], '2025-08-13T21:38:00')
 
+    def test_system_notice_with_colon_is_not_a_participant(self):
+        self.write_chat(
+            '13/8/25, 9:38 p. m. - Se actualizó la duración de los mensajes: 7 días\n'
+            '13/8/25, 9:39 p. m. - Abdair: Mensaje real\n'
+        )
+
+        messages = parse(str(self.path), persona_name='Abdair')
+
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]['metadata']['sender'], 'Abdair')
+
 
 if __name__ == '__main__':
     unittest.main()

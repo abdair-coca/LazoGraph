@@ -5,9 +5,11 @@
 - [ ] Add a single `diagnose` command that prints the active knowledge root, dataset path,
   Git/schema version, source counts, participant totals, vector counts, KG counts, and
   wiki/export health. We initially queried a stale dataset state without enough diagnostics.
-- [ ] Reject WhatsApp system notices as senders at the ingestion boundary. Two notices
+- [x] Reject WhatsApp system notices as senders at the ingestion boundary. Two notices
   (`end-to-end encryption` and `disappearing messages`) became one-message contacts and
-  malformed KG entities.
+  malformed KG entities. The WhatsApp parser now recognizes notices even when they contain
+  a colon, and the shared ingestion boundary rejects known notices plus structurally invalid
+  sender names before they can reach deduplication, vectors, participant profiles, or the KG.
 - [ ] Detect equivalent source backups before ingestion. The direct export (3614 messages)
   and an older normalized export (3627 lines) produced a 3663-message union instead of
   being recognized as two representations of the same chat.

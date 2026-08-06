@@ -128,12 +128,17 @@ def main():
 
     source_path = args.source or ''
     messages = adapter_module.parse(source_path, **parse_kwargs)
+    messages, rejected_notices = _reject_invalid_chat_senders(messages)
 
     if not messages:
+        if rejected_notices:
+            print(f'   Rejected: {rejected_notices} invalid chat system notices')
         print('⚠️  No messages parsed from source.')
         return
 
     print(f'   Parsed: {len(messages)} messages')
+    if rejected_notices:
+        print(f'   Rejected: {rejected_notices} invalid chat system notices')
 
     # --- PII scan ---
     pii_flags = scan_pii(messages)
@@ -196,6 +201,23 @@ def _load_adapter(name: str):
     except ImportError as e:
         print(f'❌ Adapter not found: {name} ({e})', file=sys.stderr)
         sys.exit(1)
+
+
+def _reject_invalid_chat_senders(messages: list[dict]) -> tuple[list[dict], int]:
+    """Drop parser artifacts that would create fake chat participants."""
+    from adapters.chat_export import is_whatsapp_system_notice
+
+    accepted = []
+    rejected = 0
+    for message in messages:
+        metadata = message.get('metadata', {})
+        sender = str(metadata.get('sender', '')).strip() if isinstance(metadata, dict) else ''
+        invalid_structure = bool(sender and ('\n' in sender or '\r' in sender or len(sender) > 100))
+        if sender and (invalid_structure or is_whatsapp_system_notice(sender)):
+            rejected += 1
+            continue
+        accepted.append(message)
+    return accepted, rejected
 
 
 # --- PII Scanning ---
