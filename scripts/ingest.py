@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -73,6 +74,9 @@ def main():
             print('⚠️  No stored messages available for KG rebuild.')
             return
         print(f'🔄 Rebuilding Knowledge Graph from {len(messages)} stored messages...')
+        cleared = _clear_managed_kg(dataset_dir)
+        print(f'   Cleared: {cleared} managed relationships')
+        _write_participant_profiles(dataset_dir, messages)
         kg_stats = _extract_kg_triples(dataset_dir, messages)
         _set_kg_stats(dataset_dir, kg_stats)
         print(
@@ -136,6 +140,12 @@ def main():
 
     # --- Extract KG triples ---
     kg_stats = _extract_kg_triples(dataset_dir, new_messages)
+
+    # Recompute profiles from durable backups plus this batch. This is
+    # idempotent when ingestion is retried after a later failure.
+    profile_messages = _load_stored_messages(dataset_dir) + new_messages
+    profile_messages, _ = dedup_messages(profile_messages, set())
+    _write_participant_profiles(dataset_dir, profile_messages)
 
     # Write the dedup source backup only after both storage layers succeed.
     # MemPalace upserts and KG triples are idempotent, so a failed run can be
@@ -397,26 +407,56 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
     entities = set()
     relationships_by_key = {}
 
-    def add_relationship(name: str, rel_type: str, msg: dict):
-        name = name.strip()
-        if not name or name.casefold() == slug.casefold():
+    def add_relationship(source: str, target: str, rel_type: str, msg: dict):
+        source = source.strip()
+        target = target.strip()
+        if not source or not target or source.casefold() == target.casefold():
             return
-        entities.add(name)
-        key = (name.casefold(), slug.casefold(), rel_type)
+        if source.casefold() != slug.casefold():
+            entities.add(source)
+        if target.casefold() != slug.casefold():
+            entities.add(target)
+        key = (source.casefold(), target.casefold(), rel_type)
         relationships_by_key.setdefault(key, {
-            'from': name,
-            'to': slug,
+            'from': source,
+            'to': target,
             'type': rel_type,
             'confidence': 'extracted',
             'timestamp': msg.get('timestamp'),
             'source': msg.get('source_file'),
         })
 
+    participant_messages = {}
+    assistant_names = {}
+    user_names = {}
     for msg in messages:
         sender = str(msg.get('metadata', {}).get('sender', '')).strip()
-        if sender and msg['role'] != 'assistant':
-            add_relationship(sender, 'communicates_with', msg)
+        if not sender:
+            continue
+        key = sender.casefold()
+        participant_messages.setdefault(key, msg)
+        if msg.get('role') == 'assistant':
+            assistant_names.setdefault(key, sender)
+        else:
+            user_names.setdefault(key, sender)
 
+    participants = {**user_names, **assistant_names}
+    for key, name in participants.items():
+        entities.add(name)
+        add_relationship(name, slug, 'participant_in', participant_messages[key])
+
+    for assistant_key, assistant_name in assistant_names.items():
+        for user_key, user_name in user_names.items():
+            if assistant_key != user_key:
+                add_relationship(
+                    assistant_name,
+                    user_name,
+                    'communicates_with',
+                    participant_messages[user_key],
+                )
+
+    for msg in messages:
+        sender = str(msg.get('metadata', {}).get('sender', '')).strip()
         if msg['role'] != 'assistant':
             continue
 
@@ -425,7 +465,7 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
         for pattern, rel_type in _RELATIONSHIP_PATTERNS:
             for match in pattern.finditer(content):
                 name = match.group(1)
-                add_relationship(name, rel_type, msg)
+                add_relationship(name, sender or slug, rel_type, msg)
 
         # General person mentions
         for match in _PERSON_PATTERN.finditer(content):
@@ -442,6 +482,80 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
         'relationships': len(relationships),
     }
     return persisted_stats if isinstance(persisted_stats, dict) else extracted_stats
+
+
+def _build_participant_profiles(messages: list[dict]) -> list[dict]:
+    """Aggregate stable, independent identities from exact chat senders."""
+    profiles = {}
+    for msg in messages:
+        sender = str(msg.get('metadata', {}).get('sender', '')).strip()
+        if not sender:
+            continue
+        key = sender.casefold()
+        profile = profiles.setdefault(key, {
+            'name': sender,
+            'message_count': 0,
+            'assistant_messages': 0,
+            'user_messages': 0,
+            'first_seen': None,
+            'last_seen': None,
+            'sources': set(),
+        })
+        profile['message_count'] += 1
+        role_key = 'assistant_messages' if msg.get('role') == 'assistant' else 'user_messages'
+        profile[role_key] += 1
+        timestamp = msg.get('timestamp')
+        if timestamp:
+            if profile['first_seen'] is None or timestamp < profile['first_seen']:
+                profile['first_seen'] = timestamp
+            if profile['last_seen'] is None or timestamp > profile['last_seen']:
+                profile['last_seen'] = timestamp
+        source = msg.get('source_file')
+        if source:
+            profile['sources'].add(source)
+
+    result = []
+    for profile in profiles.values():
+        profile['identity_type'] = (
+            'persona' if profile['assistant_messages'] else 'contact'
+        )
+        profile['sources'] = sorted(profile['sources'])
+        result.append(profile)
+    return sorted(result, key=lambda item: item['name'].casefold())
+
+
+def _write_participant_profiles(dataset_dir: Path, messages: list[dict]) -> list[dict]:
+    """Replace participant profiles using the complete deduplicated dataset."""
+    profiles = _build_participant_profiles(messages)
+    payload = {
+        'schema_version': 1,
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+        'participants': profiles,
+    }
+    (dataset_dir / 'participants.json').write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + '\n',
+        encoding='utf-8',
+    )
+    return profiles
+
+
+def _clear_managed_kg(dataset_dir: Path) -> int:
+    """Remove only triples owned by this ingestion pipeline before rebuild."""
+    db_path = dataset_dir / '.mempalace' / 'palace' / 'knowledge_graph.sqlite3'
+    if not db_path.exists():
+        return 0
+    connection = sqlite3.connect(db_path)
+    try:
+        cursor = connection.execute(
+            'DELETE FROM triples WHERE adapter_name = ?',
+            ('persona-knowledge',),
+        )
+        connection.commit()
+        return max(cursor.rowcount, 0)
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        connection.close()
 
 
 def _write_kg(palace_dir: Path, entities: set[str], relationships: list[dict]):

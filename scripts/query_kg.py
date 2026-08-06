@@ -40,14 +40,21 @@ def main():
         print(f'Dataset not found: {dataset_dir}', file=sys.stderr)
         sys.exit(1)
 
-    entities, relationships, native_stats = _load_kg(dataset_dir)
+    profiles = _load_participant_profiles(dataset_dir)
+    entities, relationships, native_stats = _load_kg(dataset_dir, profiles=profiles)
 
     if not entities and not relationships:
         print('Knowledge Graph is empty. Ingest data first.', file=sys.stderr)
         sys.exit(1)
 
     if args.entity:
-        _query_entity(args.entity, entities, relationships, as_json=args.json)
+        _query_entity(
+            args.entity,
+            entities,
+            relationships,
+            profiles=profiles,
+            as_json=args.json,
+        )
     elif args.path:
         _query_path(args.path[0], args.path[1], entities, relationships, as_json=args.json)
     elif args.stats:
@@ -61,7 +68,22 @@ def main():
         parser.print_help()
 
 
-def _load_kg(dataset_dir: Path) -> tuple[set[str], list[dict], dict | None]:
+def _load_participant_profiles(dataset_dir: Path) -> list[dict]:
+    """Load independently identified chat participants."""
+    profile_path = dataset_dir / 'participants.json'
+    try:
+        payload = json.loads(profile_path.read_text(encoding='utf-8'))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+    profiles = payload.get('participants', [])
+    return profiles if isinstance(profiles, list) else []
+
+
+def _load_kg(
+    dataset_dir: Path,
+    *,
+    profiles: list[dict] | None = None,
+) -> tuple[set[str], list[dict], dict | None]:
     """Load entities and relationships from MemPalace KG or fallback JSON."""
     palace_dir = dataset_dir / '.mempalace' / 'palace'
 
@@ -71,13 +93,24 @@ def _load_kg(dataset_dir: Path) -> tuple[set[str], list[dict], dict | None]:
 
         all_entities = set()
         all_rels = []
+        relationship_keys = set()
 
         try:
             stats = kg.stats()
             if stats.get('entities', 0):
                 all_entities.add(dataset_dir.name)
-            result = kg.query_entity(dataset_dir.name, direction='both')
-            if isinstance(result, list):
+            query_names = [dataset_dir.name]
+            for profile in profiles or _load_participant_profiles(dataset_dir):
+                name = str(profile.get('name', '')).strip()
+                if name and name.casefold() not in {
+                    item.casefold() for item in query_names
+                }:
+                    query_names.append(name)
+                    all_entities.add(name)
+            for query_name in query_names:
+                result = kg.query_entity(query_name, direction='both')
+                if not isinstance(result, list):
+                    continue
                 for rel in result:
                     source = rel.get('subject', '')
                     target = rel.get('object', '')
@@ -85,14 +118,23 @@ def _load_kg(dataset_dir: Path) -> tuple[set[str], list[dict], dict | None]:
                         all_entities.add(source)
                     if target:
                         all_entities.add(target)
-                    all_rels.append({
+                    relationship = {
                         'from': source,
                         'to': target,
                         'type': rel.get('predicate', ''),
                         'confidence': rel.get('confidence'),
                         'source': rel.get('source_closet') or '',
                         'timestamp': rel.get('valid_from'),
-                    })
+                    }
+                    key = (
+                        relationship['from'],
+                        relationship['to'],
+                        relationship['type'],
+                        relationship['timestamp'],
+                    )
+                    if key not in relationship_keys:
+                        relationship_keys.add(key)
+                        all_rels.append(relationship)
         finally:
             kg.close()
 
@@ -143,8 +185,14 @@ def _build_adjacency(relationships: list[dict]) -> dict[str, list[dict]]:
     return dict(adj)
 
 
-def _query_entity(name: str, entities: set[str], relationships: list[dict],
-                  *, as_json: bool):
+def _query_entity(
+    name: str,
+    entities: set[str],
+    relationships: list[dict],
+    *,
+    profiles: list[dict] | None = None,
+    as_json: bool,
+):
     matched = _fuzzy_match(name, entities)
     if not matched:
         print(f'No entity matching "{name}"', file=sys.stderr)
@@ -153,12 +201,27 @@ def _query_entity(name: str, entities: set[str], relationships: list[dict],
     rels = [r for r in relationships
             if r.get('from', '') == matched or r.get('to', '') == matched]
 
+    profile = next(
+        (
+            item for item in profiles or []
+            if str(item.get('name', '')).casefold() == matched.casefold()
+        ),
+        None,
+    )
+
     if as_json:
-        print(json.dumps({'entity': matched, 'relationships': rels}, indent=2,
+        print(json.dumps({'entity': matched, 'profile': profile, 'relationships': rels}, indent=2,
                          ensure_ascii=False))
         return
 
     print(f'Entity: {matched}')
+    if profile:
+        print(f'Identity: {profile.get("identity_type", "unknown")}')
+        print(f'Messages: {profile.get("message_count", 0)}')
+        print(f'Assistant messages: {profile.get("assistant_messages", 0)}')
+        print(f'User messages: {profile.get("user_messages", 0)}')
+        print(f'First seen: {profile.get("first_seen") or "unknown"}')
+        print(f'Last seen: {profile.get("last_seen") or "unknown"}')
     print(f'Relationships: {len(rels)}')
     if not rels:
         print('  (no relationships found)')
@@ -280,12 +343,17 @@ def _query_stats(
 
 def _fuzzy_match(query: str, entities: set[str]) -> str | None:
     """Case-insensitive fuzzy match against entity names."""
-    q = query.lower().strip()
+    q = query.casefold().strip()
     for entity in entities:
-        if entity.lower() == q:
+        if entity.casefold() == q:
+            return entity
+    # Prefer human-style names beginning with the query. This keeps "Abdair"
+    # mapped to "Abdair Coca" instead of a dataset slug like "abdair-e2e".
+    for entity in sorted(entities, key=str.casefold):
+        if entity.casefold().startswith(f'{q} '):
             return entity
     for entity in entities:
-        if q in entity.lower() or entity.lower() in q:
+        if q in entity.casefold() or entity.casefold() in q:
             return entity
     return None
 

@@ -2,6 +2,7 @@
 """Regression tests for the MemPalace 3.x integration surface."""
 
 import json
+import sqlite3
 import sys
 import tempfile
 import types
@@ -205,10 +206,77 @@ class TestMemPalaceCompatibility(unittest.TestCase):
             (rel['from'], rel['to'], rel['type']) for rel in relationships
         }
 
-        self.assertEqual(stats, {'entities': 3, 'relationships': 2})
-        self.assertEqual(entities, {'Alizon', 'Carla', 'Diego'})
-        self.assertIn(('Alizon', 'sam', 'communicates_with'), relationship_keys)
-        self.assertIn(('Carla', 'sam', 'friend_of'), relationship_keys)
+        self.assertEqual(stats, {'entities': 4, 'relationships': 4})
+        self.assertEqual(entities, {'Abdair', 'Alizon', 'Carla', 'Diego'})
+        self.assertIn(('Abdair', 'sam', 'participant_in'), relationship_keys)
+        self.assertIn(('Alizon', 'sam', 'participant_in'), relationship_keys)
+        self.assertIn(('Abdair', 'Alizon', 'communicates_with'), relationship_keys)
+        self.assertIn(('Carla', 'Abdair', 'friend_of'), relationship_keys)
+
+        profiles = ingest._write_participant_profiles(self.dataset, messages)
+        self.assertEqual(profiles[0]['name'], 'Abdair')
+        self.assertEqual(profiles[0]['identity_type'], 'persona')
+        self.assertEqual(profiles[0]['message_count'], 1)
+        self.assertEqual(profiles[1]['name'], 'Alizon')
+        self.assertEqual(profiles[1]['identity_type'], 'contact')
+        self.assertEqual(profiles[1]['message_count'], 2)
+
+    def test_rebuild_clear_preserves_unmanaged_relationships(self):
+        db_path = self.dataset / '.mempalace' / 'palace' / 'knowledge_graph.sqlite3'
+        db_path.parent.mkdir(parents=True)
+        connection = sqlite3.connect(db_path)
+        connection.execute(
+            'CREATE TABLE triples (id INTEGER PRIMARY KEY, adapter_name TEXT)'
+        )
+        connection.executemany(
+            'INSERT INTO triples (adapter_name) VALUES (?)',
+            [('persona-knowledge',), ('manual',), (None,)],
+        )
+        connection.commit()
+        connection.close()
+
+        cleared = ingest._clear_managed_kg(self.dataset)
+
+        connection = sqlite3.connect(db_path)
+        remaining = connection.execute(
+            'SELECT adapter_name FROM triples ORDER BY id'
+        ).fetchall()
+        connection.close()
+        self.assertEqual(cleared, 1)
+        self.assertEqual(remaining, [('manual',), (None,)])
+
+    def test_query_loader_discovers_direct_participant_relationship(self):
+        profiles = [
+            {'name': 'Abdair', 'identity_type': 'persona'},
+            {'name': 'Alizon', 'identity_type': 'contact'},
+        ]
+        FakeKnowledgeGraph.query_result = [{
+            'subject': 'Abdair',
+            'predicate': 'communicates_with',
+            'object': 'Alizon',
+            'valid_from': '2026-08-05',
+            'confidence': 1.0,
+            'source_closet': None,
+        }]
+
+        with patch.dict(sys.modules, self.fake.modules):
+            entities, relationships, _ = query_kg._load_kg(
+                self.dataset,
+                profiles=profiles,
+            )
+
+        self.assertEqual(entities, {'sam', 'Abdair', 'Alizon'})
+        self.assertEqual(len(relationships), 1)
+        self.assertEqual(relationships[0]['from'], 'Abdair')
+        self.assertEqual(relationships[0]['to'], 'Alizon')
+
+    def test_fuzzy_match_prefers_person_name_over_dataset_slug(self):
+        matched = query_kg._fuzzy_match(
+            'Abdair',
+            {'abdair-e2e', 'Abdair Coca', 'Alizon'},
+        )
+
+        self.assertEqual(matched, 'Abdair Coca')
 
     def test_stored_messages_are_loaded_uniquely_for_kg_rebuild(self):
         sources = self.dataset / 'sources'
