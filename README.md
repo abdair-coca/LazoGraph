@@ -137,7 +137,19 @@ This path updates metadata only; embeddings remain unchanged. If vector IDs diff
 from authoritative sources, the command stops and requires `--rebuild-vectors`.
 Full vector rebuilds print progress, elapsed time, and ETA after every 128-message batch.
 
-### 7. End-to-end verification
+### 7. Coordinated atomic rebuild
+
+Rebuild vectors, KG, wiki, and run wiki lint under one exclusive dataset lock:
+
+```bash
+python scripts/rebuild_all.py --slug sam --atomic
+```
+
+With `--atomic`, affected layers are snapshotted to a private temporary directory and
+restored after any failed stage or keyboard interruption. Omit the flag to keep successful
+partial stages when a later stage fails.
+
+### 8. End-to-end verification
 
 Run the complete workflow in a disposable dataset: initialize, dry-run, ingest,
 rebuild KG, build/lint wiki, query identities, export, validate counts, then remove

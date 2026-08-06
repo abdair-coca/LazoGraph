@@ -39,9 +39,12 @@
   equivalent-source replacement now print flushed status after every 128-message batch:
   stored/total, percentage, elapsed time, and ETA derived from measured average throughput.
   Zero-duration and completed batches remain deterministic and avoid division errors.
-- [ ] Make KG/vector/wiki rebuild an optional atomic transaction with rollback. Current layers
-  are individually recoverable, but interruption between them can temporarily leave counts
-  inconsistent.
+- [x] Make KG/vector/wiki rebuild an optional atomic transaction with rollback. New
+  `rebuild_all.py --atomic` acquires an exclusive dataset lock, snapshots palace storage,
+  participant profiles, dataset metadata, and wiki into a private temporary directory, then
+  runs vector rebuild, KG rebuild, wiki build, and lint in isolated subprocesses. Any failed
+  stage or `KeyboardInterrupt` restores exact previous files and removes newly created paths.
+  Omitting `--atomic` preserves explicit non-atomic behavior.
 - [ ] Add automatic post-rebuild smoke tests for canonical aliases, KG paths, participant-filtered
   semantic search, wiki lint, and export pair balance.
 - [ ] Improve Windows E2E process output and cleanup. Buffered subprocess logs hid progress,
