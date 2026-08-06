@@ -100,6 +100,8 @@ def main():
             print('⚠️  No stored messages available for vector rebuild.')
             return
         print(f'🔄 Rebuilding MemPalace from {len(messages)} stored messages...')
+        removed = _prune_mempalace(dataset_dir, args.slug, messages)
+        print(f'   Pruned: {removed} stale vectors')
         stored = _store_in_mempalace(dataset_dir, args.slug, messages)
         _write_participant_profiles(dataset_dir, messages)
         print(f'✅ MemPalace rebuilt: {stored} messages with participant metadata')
@@ -395,6 +397,28 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
 
     print(f'   MemPalace: {stored}/{len(messages)} stored')
     return stored
+
+
+def _prune_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> int:
+    """Remove dataset vectors no longer present in authoritative source backups."""
+    try:
+        from mempalace.palace import get_collection
+    except ImportError as exc:
+        raise RuntimeError(
+            'mempalace is required for vector rebuild; install it with: pip install mempalace'
+        ) from exc
+
+    collection = get_collection(
+        str(dataset_dir / '.mempalace' / 'palace'),
+        create=True,
+    )
+    expected = {f'{slug}-{_content_hash(message)}' for message in messages}
+    result = collection.get(where={'wing': slug}, include=[])
+    stale = [vector_id for vector_id in result.get('ids', []) if vector_id not in expected]
+    batch_size = 500
+    for start in range(0, len(stale), batch_size):
+        collection.delete(ids=stale[start:start + batch_size])
+    return len(stale)
 
 
 # --- Knowledge Graph extraction ---

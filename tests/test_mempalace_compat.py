@@ -30,6 +30,8 @@ class FakeCollection:
             'metadatas': [[]],
             'distances': [[]],
         }
+        self.get_result = {'ids': []}
+        self.deletes = []
 
     def upsert(self, **kwargs):
         if self.error:
@@ -39,6 +41,12 @@ class FakeCollection:
     def query(self, **kwargs):
         self.queries.append(kwargs)
         return self.query_result
+
+    def get(self, **kwargs):
+        return self.get_result
+
+    def delete(self, **kwargs):
+        self.deletes.append(kwargs)
 
 
 class FakeKnowledgeGraph:
@@ -135,6 +143,21 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(query['where'], {'sender': 'Sam Example'})
         self.assertEqual(results[0]['content'], 'A durable memory.')
         self.assertEqual(results[0]['metadata']['sender'], 'Sam Example')
+
+    def test_vector_rebuild_prunes_ids_missing_from_authoritative_sources(self):
+        message = {
+            'role': 'assistant',
+            'content': 'Keep this.',
+            'metadata': {'sender': 'Sam'},
+        }
+        keep_id = f'sam-{ingest._content_hash(message)}'
+        self.fake.collection.get_result = {'ids': [keep_id, 'sam-stale']}
+
+        with patch.dict(sys.modules, self.fake.modules):
+            removed = ingest._prune_mempalace(self.dataset, 'sam', [message])
+
+        self.assertEqual(removed, 1)
+        self.assertEqual(self.fake.collection.deletes, [{'ids': ['sam-stale']}])
 
     def test_semantic_participant_alias_resolves_to_canonical_name(self):
         (self.dataset / 'participants.json').write_text(json.dumps({
