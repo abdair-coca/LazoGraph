@@ -174,22 +174,13 @@ def _generate_conversations(dataset_dir: Path, output_dir: Path, name: str,
             turns.append({'role': 'user', 'content': question})
             turns.append({'role': 'assistant', 'content': clean_text})
 
-    # Also include raw source assistant turns as paired conversations (unless wiki-only mode)
+    # Include authentic, participant-separated dialogue (unless wiki-only mode).
+    # Consecutive messages from the same speaker are grouped into one turn.
     if not wiki_only:
         sources_dir = dataset_dir / 'sources'
         if sources_dir.exists():
-            for jsonl_file in sources_dir.glob('*.jsonl'):
-                for line in jsonl_file.open(encoding='utf-8'):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        msg = json.loads(line)
-                        if msg.get('role') == 'assistant' and len(msg.get('content', '')) >= 20:
-                            turns.append({'role': 'user', 'content': 'Go on.'})
-                            turns.append({'role': 'assistant', 'content': msg['content']})
-                    except json.JSONDecodeError:
-                        continue
+            for jsonl_file in sorted(sources_dir.glob('*.jsonl')):
+                turns.extend(_load_source_dialogue(jsonl_file))
 
     with open(conv_path, 'w', encoding='utf-8') as f:
         for turn in turns:
@@ -197,6 +188,36 @@ def _generate_conversations(dataset_dir: Path, output_dir: Path, name: str,
 
     print(f'   conversations.jsonl: {len(turns)} turns')
     return len(turns)
+
+
+def _load_source_dialogue(jsonl_file: Path) -> list[dict]:
+    """Load authentic alternating turns, preserving user/assistant attribution."""
+    grouped = []
+    with jsonl_file.open(encoding='utf-8') as source:
+        for line in source:
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            role = message.get('role')
+            content = str(message.get('content', '')).strip()
+            if role not in {'user', 'assistant'} or not content:
+                continue
+            if grouped and grouped[-1]['role'] == role:
+                grouped[-1]['content'] += '\n' + content
+            else:
+                grouped.append({'role': role, 'content': content})
+
+    # A training dialogue needs real user context. Discard only unmatched
+    # assistant content before the first user message; never invent a prompt.
+    first_user = next(
+        (index for index, turn in enumerate(grouped) if turn['role'] == 'user'),
+        len(grouped),
+    )
+    dialogue = grouped[first_user:]
+    if dialogue and dialogue[-1]['role'] == 'user':
+        dialogue.pop()
+    return dialogue
 
 
 _STRUCTURAL_SECTIONS = {'Sources', 'See also', 'References', 'Metadata'}

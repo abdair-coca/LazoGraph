@@ -80,7 +80,18 @@ python scripts/ingest.py --slug sam --source data.txt --dry-run
 
 ### 3. Build wiki
 
-After ingestion, the agent (Cursor / Claude Code) reads MemPalace content and updates the wiki pages following the Karpathy LLM Wiki pattern. This is an agent-driven task, not a script.
+Build all six persona pages from messages authored by the independently identified
+persona. Evidence references point to exact source-backup lines; private content
+never leaves the local machine.
+
+```bash
+python scripts/build_wiki.py --slug sam --dry-run
+python scripts/build_wiki.py --slug sam
+python scripts/lint_wiki.py --slug sam
+```
+
+The deterministic builder provides a verified baseline. Human or agent review can
+add nuance later while keeping the evidence protocol in `wiki/_schema.md`.
 
 ### 4. Export for training
 
@@ -112,6 +123,26 @@ python scripts/query_kg.py --slug sam --path "Tom" "Alice"
 python scripts/query_kg.py --slug sam --stats
 ```
 
+Participant aliases are stored in private `participants.json` profiles. Repeated
+name variants can resolve to the same canonical person without mixing authorship.
+
+### 7. End-to-end verification
+
+Run the complete workflow in a disposable dataset: initialize, dry-run, ingest,
+rebuild KG, build/lint wiki, query identities, export, validate counts, then remove
+temporary data.
+
+```bash
+python scripts/e2e_test.py \
+  --source ~/whatsapp-export.txt \
+  --persona-name "Samantha" \
+  --persona-query "Sam" \
+  --contact-query "Alex"
+```
+
+Optional exact-count gates: `--expect-messages`, `--expect-persona-messages`, and
+`--expect-contact-messages`.
+
 ## Supported sources
 
 Three adapters cover all formats:
@@ -134,6 +165,7 @@ Three adapters cover all formats:
 ```
 ~/.openpersona/knowledge/{slug}/
   dataset.json                # metadata + stats
+  participants.json           # canonical people, roles, aliases, activity ranges
   .mempalace/                 # MemPalace local data
     palace/                   # ChromaDB + KG
   sources/                    # immutable source backups (JSONL)
