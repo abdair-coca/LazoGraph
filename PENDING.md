@@ -16,9 +16,13 @@
   content overlap against every active backup and stops before all writes when a large source
   has at least 95% overlap and a similar size. Small sources require an exact match; intentional
   imports can use `--allow-equivalent-source`. No automatic quarantine is performed yet.
-- [ ] Add dataset-wide invariants after every write: active-source unique messages must equal
+- [x] Add dataset-wide invariants after every write: active-source unique messages must equal
   dataset stats, participant totals, vector count, and export source snapshot. The mismatch
-  was only found after KG reconstruction.
+  was only found after KG reconstruction. A shared validator now checks active JSONL backups,
+  `dataset.json`, `participants.json`, Chroma's persisted vector count, the latest export state,
+  and newly generated export metadata. Ingestion and rebuilds fail loudly on divergence;
+  initialization, staged reconciliation, and legacy export flows report without destructive
+  repair. Older exports that predate source changes are labeled stale instead of corrupt.
 - [ ] Make source reconciliation an automatic preflight with a confirmation report, instead
   of requiring a separate repair after duplicate backups already affect profiles/KG/vectors.
 - [ ] Add a metadata-only vector migration. Adding `sender` currently re-embeds all 3614

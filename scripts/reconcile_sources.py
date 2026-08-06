@@ -13,6 +13,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 import ingest
+from dataset_invariants import print_report as print_invariant_report
+from dataset_invariants import validate_dataset
 
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
@@ -45,6 +47,7 @@ def main():
     if args.apply:
         print(f'Quarantine: {result["quarantine_dir"]}')
         print('Reconciliation applied. Next: rebuild KG, then vectors.')
+        print_invariant_report(result['invariants'], strict=False)
     else:
         print('Dry run only. Add --apply to move duplicate backups.')
 
@@ -80,6 +83,7 @@ def reconcile_sources(dataset_dir: Path, keep: str, *, apply: bool = False) -> d
     messages = ingest._load_stored_messages(dataset_dir)
     ingest._write_participant_profiles(dataset_dir, messages)
     _reconcile_dataset_stats(dataset_dir, messages)
+    invariants = validate_dataset(dataset_dir)
     (quarantine_dir / 'reconciliation.json').write_text(
         json.dumps({
             'applied_at': datetime.now(timezone.utc).isoformat(),
@@ -93,6 +97,7 @@ def reconcile_sources(dataset_dir: Path, keep: str, *, apply: bool = False) -> d
         'quarantined': moved,
         'messages': len(messages),
         'quarantine_dir': str(quarantine_dir),
+        'invariants': invariants,
     }
 
 

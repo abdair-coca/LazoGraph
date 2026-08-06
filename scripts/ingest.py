@@ -32,6 +32,8 @@ SKILL_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(SKILL_DIR))
 
 from adapters import detect_adapter
+from dataset_invariants import print_report as print_invariant_report
+from dataset_invariants import validate_dataset
 
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
@@ -98,10 +100,13 @@ def main():
         _write_participant_profiles(dataset_dir, messages)
         kg_stats = _extract_kg_triples(dataset_dir, messages)
         _set_kg_stats(dataset_dir, kg_stats)
+        invariants_ok = print_invariant_report(validate_dataset(dataset_dir))
         print(
             f'✅ Knowledge Graph rebuilt: {kg_stats["entities"]} entities, '
             f'{kg_stats["relationships"]} relationships'
         )
+        if not invariants_ok:
+            sys.exit(2)
         return
 
     if args.rebuild_vectors:
@@ -114,7 +119,10 @@ def main():
         print(f'   Pruned: {removed} stale vectors')
         stored = _store_in_mempalace(dataset_dir, args.slug, messages)
         _write_participant_profiles(dataset_dir, messages)
+        invariants_ok = print_invariant_report(validate_dataset(dataset_dir))
         print(f'✅ MemPalace rebuilt: {stored} messages with participant metadata')
+        if not invariants_ok:
+            sys.exit(2)
         return
 
     # --- Resolve adapter ---
@@ -208,6 +216,7 @@ def main():
 
     # --- Update dataset.json stats ---
     _update_stats(dataset_dir, new_messages, kg_stats)
+    invariants_ok = print_invariant_report(validate_dataset(dataset_dir))
 
     # --- Report ---
     assistant_turns = sum(1 for m in new_messages if m['role'] == 'assistant')
@@ -216,6 +225,8 @@ def main():
     print(f'   PII: {pii_str}')
     print(f'   KG: {kg_stats["entities"]} entities, {kg_stats["relationships"]} relationships')
     print(f'   → sources/{source_filename}')
+    if not invariants_ok:
+        sys.exit(2)
 
 
 def _load_adapter(name: str):

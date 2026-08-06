@@ -15,6 +15,9 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dataset_invariants import print_report as print_invariant_report
+from dataset_invariants import validate_dataset
+
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
     Path.home() / '.openpersona' / 'knowledge'
@@ -91,6 +94,8 @@ def init_dataset(slug: str, name: str) -> Path:
     wiki_dir = root / 'wiki'
     wiki_dir.mkdir()
     init_wiki(wiki_dir, slug, name)
+
+    print_invariant_report(validate_dataset(root), strict=False)
 
     print(f'✅ Dataset initialized: {root}')
     print(f'   Slug: {slug}')
