@@ -132,9 +132,7 @@ class TestMemPalaceCompatibility(unittest.TestCase):
 
         query = self.fake.collection.queries[0]
         self.assertEqual(query['n_results'], 3)
-        self.assertEqual(query['where'], {
-            '$and': [{'wing': 'sam'}, {'sender': 'Sam Example'}]
-        })
+        self.assertEqual(query['where'], {'sender': 'Sam Example'})
         self.assertEqual(results[0]['content'], 'A durable memory.')
         self.assertEqual(results[0]['metadata']['sender'], 'Sam Example')
 
@@ -207,6 +205,34 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(relationships[0]['to'], 'sam')
         self.assertEqual(relationships[0]['type'], 'friend_of')
         self.assertEqual(native_stats, {'entities': 1, 'triples': 0})
+
+    def test_query_loader_prefers_persisted_sqlite_graph(self):
+        db_path = self.dataset / '.mempalace' / 'palace' / 'knowledge_graph.sqlite3'
+        db_path.parent.mkdir(parents=True)
+        connection = sqlite3.connect(db_path)
+        connection.execute('CREATE TABLE entities (id TEXT PRIMARY KEY, name TEXT)')
+        connection.execute(
+            'CREATE TABLE triples ('
+            'subject TEXT, predicate TEXT, object TEXT, confidence REAL, '
+            'source_file TEXT, valid_from TEXT)'
+        )
+        connection.executemany(
+            'INSERT INTO entities (id, name) VALUES (?, ?)',
+            [('sam', 'Sam Example'), ('alex', 'Alex')],
+        )
+        connection.execute(
+            'INSERT INTO triples VALUES (?, ?, ?, ?, ?, ?)',
+            ('sam', 'communicates_with', 'alex', 1.0, 'chat.txt', '2026-08-05'),
+        )
+        connection.commit()
+        connection.close()
+
+        entities, relationships, stats = query_kg._load_kg(self.dataset)
+
+        self.assertEqual(entities, {'Sam Example', 'Alex'})
+        self.assertEqual(relationships[0]['from'], 'Sam Example')
+        self.assertEqual(relationships[0]['to'], 'Alex')
+        self.assertEqual(stats, {'entities': 2, 'triples': 1})
 
     def test_initializer_uses_current_api(self):
         palace_dir = self.dataset / '.mempalace'

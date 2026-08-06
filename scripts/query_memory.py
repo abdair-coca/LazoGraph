@@ -99,14 +99,15 @@ def search_memory(
         str(dataset_dir / '.mempalace' / 'palace'),
         create=False,
     )
-    where = {'wing': dataset_dir.name}
+    query_args = {
+        'query_texts': [query],
+        'n_results': limit,
+        'include': ['documents', 'metadatas', 'distances'],
+    }
     if participant:
-        where = {'$and': [where, {'sender': participant}]}
+        query_args['where'] = {'sender': participant}
     result = collection.query(
-        query_texts=[query],
-        n_results=limit,
-        where=where,
-        include=['documents', 'metadatas', 'distances'],
+        **query_args,
     )
     documents = (result.get('documents') or [[]])[0]
     metadatas = (result.get('metadatas') or [[]])[0]

@@ -14,6 +14,7 @@ Usage:
 import argparse
 import json
 import os
+import sqlite3
 import sys
 from collections import defaultdict, deque
 from pathlib import Path
@@ -93,6 +94,10 @@ def _load_kg(
 ) -> tuple[set[str], list[dict], dict | None]:
     """Load entities and relationships from MemPalace KG or fallback JSON."""
     palace_dir = dataset_dir / '.mempalace' / 'palace'
+    db_path = palace_dir / 'knowledge_graph.sqlite3'
+
+    if db_path.exists():
+        return _load_kg_sqlite(db_path)
 
     try:
         from mempalace.knowledge_graph import KnowledgeGraph
@@ -152,6 +157,41 @@ def _load_kg(
 
     entities, relationships = _load_kg_fallback(dataset_dir)
     return entities, relationships, None
+
+
+def _load_kg_sqlite(db_path: Path) -> tuple[set[str], list[dict], dict]:
+    """Read the persisted graph directly, avoiding API/cache-dependent results."""
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        entity_rows = connection.execute('SELECT id, name FROM entities').fetchall()
+        names = {row['id']: row['name'] for row in entity_rows}
+        triple_rows = connection.execute(
+            'SELECT subject, predicate, object, confidence, source_file, valid_from '
+            'FROM triples'
+        ).fetchall()
+    except sqlite3.DatabaseError as exc:
+        raise RuntimeError(f'Knowledge Graph database read failed: {db_path} ({exc})') from exc
+    finally:
+        connection.close()
+
+    relationships = []
+    for row in triple_rows:
+        source = names.get(row['subject'], row['subject'])
+        target = names.get(row['object'], row['object'])
+        relationships.append({
+            'from': source,
+            'to': target,
+            'type': row['predicate'],
+            'confidence': row['confidence'],
+            'source': row['source_file'] or '',
+            'timestamp': row['valid_from'],
+        })
+    entities = set(names.values())
+    return entities, relationships, {
+        'entities': len(entities),
+        'triples': len(relationships),
+    }
 
 
 def _load_kg_fallback(dataset_dir: Path) -> tuple[set[str], list[dict]]:
