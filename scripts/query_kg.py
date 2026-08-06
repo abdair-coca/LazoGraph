@@ -56,7 +56,14 @@ def main():
             as_json=args.json,
         )
     elif args.path:
-        _query_path(args.path[0], args.path[1], entities, relationships, as_json=args.json)
+        _query_path(
+            args.path[0],
+            args.path[1],
+            entities,
+            relationships,
+            profiles=profiles,
+            as_json=args.json,
+        )
     elif args.stats:
         _query_stats(
             entities,
@@ -193,7 +200,7 @@ def _query_entity(
     profiles: list[dict] | None = None,
     as_json: bool,
 ):
-    matched = _fuzzy_match(name, entities)
+    matched = _resolve_entity(name, entities, profiles or [])
     if not matched:
         print(f'No entity matching "{name}"', file=sys.stderr)
         sys.exit(1)
@@ -237,9 +244,10 @@ def _query_entity(
 
 
 def _query_path(start: str, end: str, entities: set[str],
-                relationships: list[dict], *, as_json: bool):
-    start_match = _fuzzy_match(start, entities)
-    end_match = _fuzzy_match(end, entities)
+                relationships: list[dict], *, profiles: list[dict] | None = None,
+                as_json: bool):
+    start_match = _resolve_entity(start, entities, profiles or [])
+    end_match = _resolve_entity(end, entities, profiles or [])
 
     if not start_match:
         print(f'No entity matching "{start}"', file=sys.stderr)
@@ -356,6 +364,20 @@ def _fuzzy_match(query: str, entities: set[str]) -> str | None:
         if q in entity.casefold() or entity.casefold() in q:
             return entity
     return None
+
+
+def _resolve_entity(query: str, entities: set[str], profiles: list[dict]) -> str | None:
+    """Resolve exact entities first, then canonical profile aliases, then fuzzy names."""
+    normalized = query.casefold().strip()
+    for entity in entities:
+        if entity.casefold() == normalized:
+            return entity
+    for profile in profiles:
+        aliases = profile.get('aliases', [])
+        if any(str(alias).casefold().strip() == normalized for alias in aliases):
+            canonical = str(profile.get('name', '')).strip()
+            return _fuzzy_match(canonical, entities)
+    return _fuzzy_match(query, entities)
 
 
 if __name__ == '__main__':

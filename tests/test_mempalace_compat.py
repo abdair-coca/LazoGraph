@@ -278,6 +278,68 @@ class TestMemPalaceCompatibility(unittest.TestCase):
 
         self.assertEqual(matched, 'Abdair Coca')
 
+    def test_entity_resolution_supports_private_aliases(self):
+        matched = query_kg._resolve_entity(
+            'Alisita',
+            {'abdair-e2e', 'Abdair Coca', 'Alizon'},
+            [{'name': 'Alizon', 'aliases': ['Alizon', 'Alisita']}],
+        )
+
+        self.assertEqual(matched, 'Alizon')
+
+    def test_repeated_contact_name_variant_is_inferred_as_alias(self):
+        profiles = [
+            {'name': 'Abdair', 'identity_type': 'persona'},
+            {'name': 'Alizon', 'identity_type': 'contact'},
+        ]
+        messages = [
+            {
+                'content': 'Buenas noches, Alisita.',
+                'metadata': {'sender': 'Abdair'},
+            },
+            {
+                'content': 'Hola otra vez, Alisita.',
+                'metadata': {'sender': 'Abdair'},
+            },
+            {
+                'content': 'Hola.',
+                'metadata': {'sender': 'Alizon'},
+            },
+        ]
+
+        aliases = ingest._infer_identity_aliases(profiles, messages)
+
+        self.assertEqual(aliases, {'alizon': ['Alisita']})
+
+    def test_explicit_romantic_language_adds_partner_relationship(self):
+        messages = [
+            {
+                'role': 'assistant',
+                'content': 'Buenas noches, amor de mi vida.',
+                'timestamp': '2026-08-05T22:00:00',
+                'source_file': 'chat.txt',
+                'source_type': 'whatsapp',
+                'metadata': {'sender': 'Abdair'},
+            },
+            {
+                'role': 'user',
+                'content': 'Buenas noches.',
+                'timestamp': '2026-08-05T22:01:00',
+                'source_file': 'chat.txt',
+                'source_type': 'whatsapp',
+                'metadata': {'sender': 'Alizon'},
+            },
+        ]
+
+        with patch.object(ingest, '_write_kg') as write_kg:
+            ingest._extract_kg_triples(self.dataset, messages)
+
+        relationship_keys = {
+            (rel['from'], rel['to'], rel['type'])
+            for rel in write_kg.call_args.args[2]
+        }
+        self.assertIn(('Abdair', 'Alizon', 'romantic_partner'), relationship_keys)
+
     def test_stored_messages_are_loaded_uniquely_for_kg_rebuild(self):
         sources = self.dataset / 'sources'
         sources.mkdir()

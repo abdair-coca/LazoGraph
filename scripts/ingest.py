@@ -14,12 +14,14 @@ Usage:
 """
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
 import re
 import sqlite3
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -400,6 +402,11 @@ _RELATIONSHIP_PATTERNS = (
     (re.compile(rf'\b(?:[Mm]y\s+(?:colleague|coworker)|[Mm]i\s+(?:colega|compañer[oa](?:\s+de\s+trabajo)?))\s+({_PERSON_NAME})\b'), 'colleague_of'),
 )
 
+_ROMANTIC_PARTNER_PATTERN = re.compile(
+    r'\b(?:mi\s+(?:novia|novio|pareja)|amor\s+de\s+mi\s+vida|quiero\s+todo\s+contigo)\b',
+    re.IGNORECASE,
+)
+
 
 def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
     """Extract entities and relationships from message content."""
@@ -454,6 +461,24 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
                     'communicates_with',
                     participant_messages[user_key],
                 )
+
+    if len(assistant_names) == 1 and len(user_names) == 1:
+        assistant_name = next(iter(assistant_names.values()))
+        user_name = next(iter(user_names.values()))
+        romantic_evidence = next(
+            (
+                msg for msg in messages
+                if _ROMANTIC_PARTNER_PATTERN.search(msg.get('content', ''))
+            ),
+            None,
+        )
+        if romantic_evidence:
+            add_relationship(
+                assistant_name,
+                user_name,
+                'romantic_partner',
+                romantic_evidence,
+            )
 
     for msg in messages:
         sender = str(msg.get('metadata', {}).get('sender', '')).strip()
@@ -527,8 +552,23 @@ def _build_participant_profiles(messages: list[dict]) -> list[dict]:
 def _write_participant_profiles(dataset_dir: Path, messages: list[dict]) -> list[dict]:
     """Replace participant profiles using the complete deduplicated dataset."""
     profiles = _build_participant_profiles(messages)
+    aliases = _load_identity_aliases(dataset_dir)
+    inferred_aliases = _infer_identity_aliases(profiles, messages)
+    try:
+        dataset_meta = json.loads((dataset_dir / 'dataset.json').read_text(encoding='utf-8'))
+    except (FileNotFoundError, json.JSONDecodeError):
+        dataset_meta = {}
+    for profile in profiles:
+        profile_aliases = {profile['name']}
+        if profile['identity_type'] == 'persona':
+            display_name = str(dataset_meta.get('name', '')).strip()
+            if display_name:
+                profile_aliases.add(display_name)
+        profile_aliases.update(aliases.get(profile['name'].casefold(), []))
+        profile_aliases.update(inferred_aliases.get(profile['name'].casefold(), []))
+        profile['aliases'] = sorted(profile_aliases, key=str.casefold)
     payload = {
-        'schema_version': 1,
+        'schema_version': 2,
         'updated_at': datetime.now(timezone.utc).isoformat(),
         'participants': profiles,
     }
@@ -537,6 +577,63 @@ def _write_participant_profiles(dataset_dir: Path, messages: list[dict]) -> list
         encoding='utf-8',
     )
     return profiles
+
+
+def _infer_identity_aliases(
+    profiles: list[dict],
+    messages: list[dict],
+) -> dict[str, list[str]]:
+    """Infer repeated name variants without merging distinct participants."""
+    aliases = {}
+    authored_by = {
+        str(message.get('metadata', {}).get('sender', '')).casefold()
+        for message in messages
+    }
+    tokens = Counter(
+        token
+        for message in messages
+        for token in re.findall(r'\b[A-Za-zÁÉÍÓÚÑÜáéíóúñü]{3,}\b', message.get('content', ''))
+    )
+    for profile in profiles:
+        canonical = profile['name']
+        normalized = canonical.casefold()
+        if profile.get('identity_type') != 'contact' or len(normalized) < 4:
+            continue
+        prefix_length = max(3, min(5, len(normalized) // 2))
+        prefix = normalized[:prefix_length]
+        candidates = []
+        for token, count in tokens.items():
+            token_normalized = token.casefold()
+            if count < 2 or token_normalized in authored_by:
+                continue
+            if not token_normalized.startswith(prefix):
+                continue
+            similarity = difflib.SequenceMatcher(None, normalized, token_normalized).ratio()
+            if similarity >= 0.45 and token_normalized != normalized:
+                candidates.append(token)
+        if candidates:
+            aliases[normalized] = sorted(set(candidates), key=str.casefold)
+    return aliases
+
+
+def _load_identity_aliases(dataset_dir: Path) -> dict[str, list[str]]:
+    """Load optional private canonical-name aliases for cross-source identity matching."""
+    alias_path = dataset_dir / 'identity_aliases.json'
+    try:
+        payload = json.loads(alias_path.read_text(encoding='utf-8'))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+    canonical = payload.get('canonical', {})
+    if not isinstance(canonical, dict):
+        return {}
+    result = {}
+    for name, values in canonical.items():
+        if not isinstance(values, list):
+            continue
+        result[str(name).casefold()] = [
+            str(value).strip() for value in values if str(value).strip()
+        ]
+    return result
 
 
 def _clear_managed_kg(dataset_dir: Path) -> int:
