@@ -83,6 +83,8 @@ def main():
         print(f'🔄 Rebuilding Knowledge Graph from {len(messages)} stored messages...')
         cleared = _clear_managed_kg(dataset_dir)
         print(f'   Cleared: {cleared} managed relationships')
+        pruned = _prune_invalid_kg_entities(dataset_dir)
+        print(f'   Pruned: {pruned} invalid orphan entities')
         _write_participant_profiles(dataset_dir, messages)
         kg_stats = _extract_kg_triples(dataset_dir, messages)
         _set_kg_stats(dataset_dir, kg_stats)
@@ -663,6 +665,28 @@ def _clear_managed_kg(dataset_dir: Path) -> int:
         cursor = connection.execute(
             'DELETE FROM triples WHERE adapter_name = ?',
             ('persona-knowledge',),
+        )
+        connection.commit()
+        return max(cursor.rowcount, 0)
+    except sqlite3.OperationalError:
+        return 0
+    finally:
+        connection.close()
+
+
+def _prune_invalid_kg_entities(dataset_dir: Path) -> int:
+    """Delete malformed orphan entities left by historical parser failures."""
+    db_path = dataset_dir / '.mempalace' / 'palace' / 'knowledge_graph.sqlite3'
+    if not db_path.exists():
+        return 0
+    connection = sqlite3.connect(db_path)
+    try:
+        cursor = connection.execute(
+            "DELETE FROM entities "
+            "WHERE (length(name) > 120 OR instr(name, char(10)) > 0 "
+            "OR instr(name, char(13)) > 0) "
+            "AND id NOT IN (SELECT subject FROM triples) "
+            "AND id NOT IN (SELECT object FROM triples)"
         )
         connection.commit()
         return max(cursor.rowcount, 0)

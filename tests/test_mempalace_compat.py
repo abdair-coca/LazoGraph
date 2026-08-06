@@ -319,6 +319,42 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(cleared, 1)
         self.assertEqual(remaining, [('manual',), (None,)])
 
+    def test_rebuild_prunes_only_malformed_orphan_entities(self):
+        db_path = self.dataset / '.mempalace' / 'palace' / 'knowledge_graph.sqlite3'
+        db_path.parent.mkdir(parents=True)
+        connection = sqlite3.connect(db_path)
+        connection.execute('CREATE TABLE entities (id TEXT PRIMARY KEY, name TEXT)')
+        connection.execute(
+            'CREATE TABLE triples (subject TEXT, object TEXT)'
+        )
+        malformed = 'System notice\n8/8/25, 9' + ('x' * 130)
+        connection.executemany(
+            'INSERT INTO entities (id, name) VALUES (?, ?)',
+            [
+                ('root', 'sam'),
+                ('valid-orphan', 'Gisel'),
+                ('bad-orphan', malformed),
+                ('bad-referenced', malformed + ' referenced'),
+            ],
+        )
+        connection.execute(
+            'INSERT INTO triples (subject, object) VALUES (?, ?)',
+            ('bad-referenced', 'root'),
+        )
+        connection.commit()
+        connection.close()
+
+        pruned = ingest._prune_invalid_kg_entities(self.dataset)
+
+        connection = sqlite3.connect(db_path)
+        names = connection.execute('SELECT name FROM entities ORDER BY id').fetchall()
+        connection.close()
+        self.assertEqual(pruned, 1)
+        self.assertIn(('sam',), names)
+        self.assertIn(('Gisel',), names)
+        self.assertNotIn((malformed,), names)
+        self.assertIn((malformed + ' referenced',), names)
+
     def test_query_loader_discovers_direct_participant_relationship(self):
         profiles = [
             {'name': 'Abdair', 'identity_type': 'persona'},
