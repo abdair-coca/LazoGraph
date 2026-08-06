@@ -29,8 +29,12 @@
   `--reconcile-equivalent-source` explicitly confirms selective, recoverable quarantine; the
   incoming source becomes authoritative, then stale vectors, participant profiles, managed KG,
   counters, source index, and invariants are rebuilt. `--dry-run` previews the full plan safely.
-- [ ] Add a metadata-only vector migration. Adding `sender` currently re-embeds all 3614
-  messages and takes roughly 2–4 minutes even when document text and embeddings are unchanged.
+- [x] Add a metadata-only vector migration. Adding `sender` previously re-embedded all 3614
+  messages even when document text and embeddings were unchanged. The new
+  `--migrate-vector-metadata` path compares authoritative vector IDs, updates only changed
+  metadata through Chroma `update(ids=..., metadatas=...)`, verifies persisted fields, and
+  never submits documents or embeddings. ID drift aborts safely and requests `--rebuild-vectors`;
+  `--dry-run` reports required changes without writing.
 - [ ] Show batch progress and estimated remaining time during vector rebuild. Long CPU work
   currently appears inactive between start and completion.
 - [ ] Make KG/vector/wiki rebuild an optional atomic transaction with rollback. Current layers

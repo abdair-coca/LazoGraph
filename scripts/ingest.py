@@ -75,15 +75,21 @@ def main():
         action='store_true',
         help='Confirm replacement of equivalent active backups using recoverable quarantine',
     )
-    parser.add_argument(
+    maintenance = parser.add_mutually_exclusive_group()
+    maintenance.add_argument(
         '--rebuild-kg',
         action='store_true',
         help='Rebuild Knowledge Graph from stored sources without re-ingesting',
     )
-    parser.add_argument(
+    maintenance.add_argument(
         '--rebuild-vectors',
         action='store_true',
         help='Rebuild MemPalace vectors and participant metadata from stored sources',
+    )
+    maintenance.add_argument(
+        '--migrate-vector-metadata',
+        action='store_true',
+        help='Update persisted vector metadata without recomputing embeddings',
     )
 
     args = parser.parse_args()
@@ -129,6 +135,29 @@ def main():
         invariants_ok = print_invariant_report(validate_dataset(dataset_dir))
         print(f'✅ MemPalace rebuilt: {stored} messages with participant metadata')
         if not invariants_ok:
+            sys.exit(2)
+        return
+
+    if args.migrate_vector_metadata:
+        messages = _load_stored_messages(dataset_dir)
+        if not messages:
+            print('⚠️  No stored messages available for vector metadata migration.')
+            return
+        result = _migrate_mempalace_metadata(
+            dataset_dir,
+            args.slug,
+            messages,
+            apply=not args.dry_run,
+        )
+        action = 'would update' if args.dry_run else 'updated'
+        print(
+            f'✅ Vector metadata migration: {result["changed"]} {action}, '
+            f'{result["unchanged"]} unchanged, 0 embeddings recomputed'
+        )
+        if args.dry_run:
+            return
+        _write_participant_profiles(dataset_dir, messages)
+        if not print_invariant_report(validate_dataset(dataset_dir)):
             sys.exit(2)
         return
 
@@ -600,22 +629,9 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
         ids = []
         metadatas = []
         for msg in batch:
-            source_type = msg.get('source_type', msg.get('metadata', {}).get('type', ''))
-            hall = HALL_ROUTING.get(source_type, 'hall_voice')
             documents.append(msg['content'])
-            ids.append(f'{slug}-{_content_hash(msg)}')
-            metadata = {
-                'wing': slug,
-                'room': source_type or 'general',
-                'hall': hall,
-                'role': msg['role'],
-                'source_file': msg.get('source_file') or '',
-                'source_type': source_type or '',
-                'sender': str(msg.get('metadata', {}).get('sender', '')).strip(),
-            }
-            if msg.get('timestamp'):
-                metadata['authored_at'] = msg['timestamp']
-            metadatas.append(metadata)
+            ids.append(_vector_id(slug, msg))
+            metadatas.append(_vector_metadata(slug, msg))
         try:
             collection.upsert(
                 documents=documents,
@@ -632,6 +648,118 @@ def _store_in_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> i
     return stored
 
 
+def _vector_id(slug: str, message: dict) -> str:
+    return f'{slug}-{_content_hash(message)}'
+
+
+def _vector_metadata(slug: str, message: dict) -> dict:
+    """Build authoritative managed metadata without touching vector content."""
+    message_metadata = message.get('metadata', {})
+    if not isinstance(message_metadata, dict):
+        message_metadata = {}
+    source_type = message.get('source_type', message_metadata.get('type', ''))
+    metadata = {
+        'wing': slug,
+        'room': source_type or 'general',
+        'hall': HALL_ROUTING.get(source_type, 'hall_voice'),
+        'role': message['role'],
+        'source_file': message.get('source_file') or '',
+        'source_type': source_type or '',
+        'sender': str(message_metadata.get('sender', '')).strip(),
+    }
+    if message.get('timestamp'):
+        metadata['authored_at'] = message['timestamp']
+    return metadata
+
+
+def _migrate_mempalace_metadata(
+    dataset_dir: Path,
+    slug: str,
+    messages: list[dict],
+    *,
+    apply: bool = True,
+) -> dict:
+    """Update metadata only; never submit documents or embeddings to Chroma."""
+    try:
+        from mempalace.palace import get_collection
+    except ImportError as exc:
+        raise RuntimeError(
+            'mempalace is required for metadata migration; install it with: pip install mempalace'
+        ) from exc
+
+    collection = get_collection(
+        str(dataset_dir / '.mempalace' / 'palace'),
+        create=False,
+    )
+    expected = {
+        _vector_id(slug, message): _vector_metadata(slug, message)
+        for message in messages
+    }
+    result = collection.get(include=['metadatas'])
+    ids = list(result.get('ids', []))
+    metadatas = list(result.get('metadatas', []))
+    if len(metadatas) < len(ids):
+        metadatas.extend({} for _ in range(len(ids) - len(metadatas)))
+    existing = {
+        vector_id: dict(metadata or {})
+        for vector_id, metadata in zip(ids, metadatas)
+    }
+
+    missing = sorted(set(expected) - set(existing))
+    stale = sorted(set(existing) - set(expected))
+    if missing or stale:
+        raise RuntimeError(
+            'Vector metadata migration requires identical vector IDs; '
+            f'missing={len(missing)}, stale={len(stale)}. Run --rebuild-vectors.'
+        )
+
+    changed = []
+    for vector_id, desired in expected.items():
+        merged = {**existing[vector_id], **desired}
+        if merged != existing[vector_id]:
+            changed.append((vector_id, merged, desired))
+
+    if apply:
+        batch_size = 500
+        for start in range(0, len(changed), batch_size):
+            batch = changed[start:start + batch_size]
+            collection.update(
+                ids=[item[0] for item in batch],
+                metadatas=[item[1] for item in batch],
+            )
+
+        if changed:
+            verify = collection.get(
+                ids=[item[0] for item in changed],
+                include=['metadatas'],
+            )
+            verified = {
+                vector_id: dict(metadata or {})
+                for vector_id, metadata in zip(
+                    verify.get('ids', []),
+                    verify.get('metadatas', []),
+                )
+            }
+            failed = [
+                vector_id
+                for vector_id, _merged, desired in changed
+                if not all(
+                    verified.get(vector_id, {}).get(key) == value
+                    for key, value in desired.items()
+                )
+            ]
+            if failed:
+                raise RuntimeError(f'Vector metadata verification failed for {len(failed)} records')
+
+    return {
+        'total': len(expected),
+        'changed': len(changed),
+        'updated': len(changed) if apply else 0,
+        'unchanged': len(expected) - len(changed),
+        'embeddings_recomputed': 0,
+    }
+
+
 def _prune_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> int:
     """Remove dataset vectors no longer present in authoritative source backups."""
     try:
@@ -645,7 +773,7 @@ def _prune_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> int:
         str(dataset_dir / '.mempalace' / 'palace'),
         create=True,
     )
-    expected = {f'{slug}-{_content_hash(message)}' for message in messages}
+    expected = {_vector_id(slug, message) for message in messages}
     result = collection.get(where={'wing': slug}, include=[])
     stale = [vector_id for vector_id in result.get('ids', []) if vector_id not in expected]
     batch_size = 500

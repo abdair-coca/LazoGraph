@@ -129,8 +129,12 @@ name variants can resolve to the same canonical person without mixing authorship
 After upgrading an existing dataset, add sender metadata to its semantic index:
 
 ```bash
-python scripts/ingest.py --slug sam --rebuild-vectors
+python scripts/ingest.py --slug sam --migrate-vector-metadata --dry-run
+python scripts/ingest.py --slug sam --migrate-vector-metadata
 ```
+
+This path updates metadata only; embeddings remain unchanged. If vector IDs differ
+from authoritative sources, the command stops and requires `--rebuild-vectors`.
 
 ### 7. End-to-end verification
 

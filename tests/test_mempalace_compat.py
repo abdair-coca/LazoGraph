@@ -32,6 +32,7 @@ class FakeCollection:
         }
         self.get_result = {'ids': []}
         self.deletes = []
+        self.updates = []
 
     def upsert(self, **kwargs):
         if self.error:
@@ -43,10 +44,35 @@ class FakeCollection:
         return self.query_result
 
     def get(self, **kwargs):
-        return self.get_result
+        requested = kwargs.get('ids')
+        if requested is None:
+            return self.get_result
+        positions = {
+            vector_id: index
+            for index, vector_id in enumerate(self.get_result.get('ids', []))
+        }
+        selected = [positions[vector_id] for vector_id in requested if vector_id in positions]
+        result = {'ids': [self.get_result['ids'][index] for index in selected]}
+        if 'metadatas' in self.get_result:
+            result['metadatas'] = [self.get_result['metadatas'][index] for index in selected]
+        return result
 
     def delete(self, **kwargs):
         self.deletes.append(kwargs)
+
+    def update(self, **kwargs):
+        self.updates.append(kwargs)
+        positions = {
+            vector_id: index
+            for index, vector_id in enumerate(self.get_result.get('ids', []))
+        }
+        metadatas = self.get_result.setdefault(
+            'metadatas',
+            [{} for _ in self.get_result.get('ids', [])],
+        )
+        for vector_id, metadata in zip(kwargs['ids'], kwargs.get('metadatas', [])):
+            if vector_id in positions:
+                metadatas[positions[vector_id]] = metadata
 
 
 class FakeKnowledgeGraph:
@@ -146,6 +172,101 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(upsert['metadatas'][0]['wing'], 'sam')
         self.assertEqual(upsert['metadatas'][0]['hall'], 'hall_voice')
         self.assertEqual(upsert['metadatas'][0]['sender'], '')
+
+    def test_vector_metadata_migration_never_submits_documents_or_embeddings(self):
+        message = {
+            'role': 'assistant',
+            'content': 'A durable memory.',
+            'timestamp': '2026-08-05T12:00:00',
+            'source_file': 'chat.txt',
+            'source_type': 'whatsapp',
+            'metadata': {'sender': 'Sam'},
+        }
+        vector_id = ingest._vector_id('sam', message)
+        old_metadata = ingest._vector_metadata('sam', message)
+        old_metadata['sender'] = ''
+        self.fake.collection.get_result = {
+            'ids': [vector_id],
+            'metadatas': [old_metadata],
+        }
+
+        with patch.dict(sys.modules, self.fake.modules):
+            result = ingest._migrate_mempalace_metadata(
+                self.dataset,
+                'sam',
+                [message],
+            )
+
+        self.assertEqual(result['changed'], 1)
+        self.assertEqual(result['embeddings_recomputed'], 0)
+        self.assertEqual(len(self.fake.collection.updates), 1)
+        update = self.fake.collection.updates[0]
+        self.assertEqual(set(update), {'ids', 'metadatas'})
+        self.assertEqual(update['metadatas'][0]['sender'], 'Sam')
+        self.assertEqual(self.fake.collection.upserts, [])
+
+    def test_vector_metadata_migration_dry_run_writes_nothing(self):
+        message = {
+            'role': 'assistant',
+            'content': 'A durable memory.',
+            'source_type': 'whatsapp',
+            'metadata': {'sender': 'Sam'},
+        }
+        vector_id = ingest._vector_id('sam', message)
+        self.fake.collection.get_result = {
+            'ids': [vector_id],
+            'metadatas': [{'wing': 'sam'}],
+        }
+
+        with patch.dict(sys.modules, self.fake.modules):
+            result = ingest._migrate_mempalace_metadata(
+                self.dataset,
+                'sam',
+                [message],
+                apply=False,
+            )
+
+        self.assertEqual(result['changed'], 1)
+        self.assertEqual(result['updated'], 0)
+        self.assertEqual(self.fake.collection.updates, [])
+
+    def test_vector_metadata_migration_skips_identical_metadata(self):
+        message = {
+            'role': 'assistant',
+            'content': 'A durable memory.',
+            'source_type': 'whatsapp',
+            'metadata': {'sender': 'Sam'},
+        }
+        vector_id = ingest._vector_id('sam', message)
+        self.fake.collection.get_result = {
+            'ids': [vector_id],
+            'metadatas': [ingest._vector_metadata('sam', message)],
+        }
+
+        with patch.dict(sys.modules, self.fake.modules):
+            result = ingest._migrate_mempalace_metadata(self.dataset, 'sam', [message])
+
+        self.assertEqual(result['changed'], 0)
+        self.assertEqual(result['unchanged'], 1)
+        self.assertEqual(self.fake.collection.updates, [])
+
+    def test_vector_metadata_migration_rejects_id_drift_before_writing(self):
+        message = {
+            'role': 'assistant',
+            'content': 'Expected memory.',
+            'source_type': 'whatsapp',
+            'metadata': {'sender': 'Sam'},
+        }
+        self.fake.collection.get_result = {
+            'ids': ['sam-stale'],
+            'metadatas': [{'wing': 'sam'}],
+        }
+
+        with patch.dict(sys.modules, self.fake.modules):
+            with self.assertRaisesRegex(RuntimeError, 'missing=1, stale=1'):
+                ingest._migrate_mempalace_metadata(self.dataset, 'sam', [message])
+
+        self.assertEqual(self.fake.collection.updates, [])
 
     def test_semantic_search_filters_by_canonical_participant(self):
         self.fake.collection.query_result = {
