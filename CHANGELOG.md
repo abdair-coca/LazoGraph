@@ -1,4 +1,40 @@
-# Changelog — persona-knowledge
+# Changelog — LazoGraph
+
+## [0.3.0] — 2026-08-07
+
+### Added
+
+- Localized Spanish WhatsApp parsing, multiline preservation, and system-notice rejection.
+- Canonical persona/contact profiles with aliases and participant-filtered semantic search.
+- Equivalent-source detection, recoverable reconciliation, quarantine inspection, and transactional restoration.
+- Dataset-wide source/profile/vector/export consistency invariants.
+- Vector metadata-only migration plus rebuild progress and ETA.
+- Atomic vector/KG/wiki rebuild with exclusive lock and rollback.
+- Read-only dataset diagnosis and five cross-layer functional smoke tests.
+- Deterministic evidence-backed six-page wiki builder.
+- Conservative person NER, bounded coreference, numeric relationship confidence, and labeled extraction evaluation.
+- PII export policies: default block, deterministic redaction, and explicit allow.
+- Windows-safe E2E output, configurable stage timeouts, and retrying temporary cleanup.
+- Authentic alternating dialogue export without invented prompts.
+
+### Changed
+
+- Project product name is now LazoGraph; the compatible skill/package identifier remains `persona-knowledge`.
+- Knowledge Graph access uses the current `db_path` API and persisted SQLite state.
+- Private dataset storage is explicitly separated from the Git checkout.
+- Wiki generation is now deterministic and script-driven; human or agent review remains optional.
+
+### Fixed
+
+- Duplicate normalized/direct chat backups no longer inflate datasets.
+- Stale vectors are pruned after authoritative source changes.
+- Malformed WhatsApp notices cannot become participants or orphan graph entities.
+- Semantic participant filters resolve canonical sender metadata correctly.
+- Windows legacy console code pages no longer crash CLI output.
+
+### Current limitation
+
+- Semantic and graph queries return evidence; conversational RAG answer synthesis is not implemented yet.
 
 ## [0.2.0] — 2026-04-11
 

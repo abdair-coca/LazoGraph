@@ -1,6 +1,12 @@
 # Pending work
 
-## Optimization backlog from real end-to-end testing
+## Active roadmap
+
+- [ ] Add a conversational RAG command that retrieves participant-filtered memories, KG paths,
+  and wiki evidence, then synthesizes cited answers through an explicit local Ollama or hosted
+  model policy. Current query commands return evidence but do not generate natural-language answers.
+
+## Completed optimization backlog from real end-to-end testing
 
 - [x] Add a single `diagnose` command that prints the active knowledge root, dataset path,
   Git/schema version, source counts, participant totals, vector counts, KG counts, and
@@ -17,7 +23,7 @@
   being recognized as two representations of the same chat. Ingestion now compares normalized
   content overlap against every active backup and stops before all writes when a large source
   has at least 95% overlap and a similar size. Small sources require an exact match; intentional
-  imports can use `--allow-equivalent-source`. No automatic quarantine is performed yet.
+  imports can use `--allow-equivalent-source`; confirmed replacement uses recoverable quarantine.
 - [x] Add dataset-wide invariants after every write: active-source unique messages must equal
   dataset stats, participant totals, vector count, and export source snapshot. The mismatch
   was only found after KG reconstruction. A shared validator now checks active JSONL backups,
