@@ -47,8 +47,10 @@
   runs vector rebuild, KG rebuild, wiki build, and lint in isolated subprocesses. Any failed
   stage or `KeyboardInterrupt` restores exact previous files and removes newly created paths.
   Omitting `--atomic` preserves explicit non-atomic behavior.
-- [ ] Add automatic post-rebuild smoke tests for canonical aliases, KG paths, participant-filtered
-  semantic search, wiki lint, and export pair balance.
+- [x] Add automatic post-rebuild smoke tests for canonical aliases, KG paths, participant-filtered
+  semantic search, wiki lint, and export pair balance. `smoke_test.py` now runs all five probes,
+  reports every failed layer, and is the final coordinated rebuild stage so atomic mode rolls
+  back when rebuilt data is not functionally queryable.
 - [ ] Improve Windows E2E process output and cleanup. Buffered subprocess logs hid progress,
   the first run exceeded a 120-second wrapper timeout, and one validation run temporarily held
   `chroma.sqlite3` open during cleanup.

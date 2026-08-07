@@ -112,6 +112,11 @@ def _build_stages(slug: str) -> list[dict]:
             'script': 'lint_wiki.py',
             'arguments': ('--slug', slug),
         },
+        {
+            'name': 'smoke-tests',
+            'script': 'smoke_test.py',
+            'arguments': ('--slug', slug),
+        },
     ]
 
 

@@ -73,7 +73,9 @@ class TestAtomicRebuild(unittest.TestCase):
             runner=self._mutating_runner(calls=calls),
         )
 
-        self.assertEqual(calls, ['vectors', 'knowledge-graph', 'wiki', 'wiki-lint'])
+        self.assertEqual(calls, [
+            'vectors', 'knowledge-graph', 'wiki', 'wiki-lint', 'smoke-tests',
+        ])
         self.assertFalse(result['rolled_back'])
         self.assertEqual(self.palace.joinpath('chroma.sqlite3').read_bytes(), b'new-vectors')
         self.assertEqual(self.dataset.joinpath('dataset.json').read_text(), 'new-dataset')

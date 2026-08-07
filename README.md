@@ -149,6 +149,14 @@ With `--atomic`, affected layers are snapshotted to a private temporary director
 restored after any failed stage or keyboard interruption. Omit the flag to keep successful
 partial stages when a later stage fails.
 
+The final rebuild stage runs cross-layer smoke tests for canonical aliases, persona/contact
+KG connectivity, participant-filtered semantic search, wiki lint, and complete export pairs.
+Run it independently when needed:
+
+```bash
+python scripts/smoke_test.py --slug sam
+```
+
 ### 8. Diagnose persisted state
 
 Inspect every persisted layer without changing data:
