@@ -137,6 +137,18 @@ This path updates metadata only; embeddings remain unchanged. If vector IDs diff
 from authoritative sources, the command stops and requires `--rebuild-vectors`.
 Full vector rebuilds print progress, elapsed time, and ETA after every 128-message batch.
 
+Inspect recoverable source quarantine, preview a restore, then apply it transactionally:
+
+```bash
+python scripts/quarantine.py --slug sam list
+python scripts/quarantine.py --slug sam show 20260807T120000Z
+python scripts/quarantine.py --slug sam restore 20260807T120000Z
+python scripts/quarantine.py --slug sam restore 20260807T120000Z --apply
+```
+
+Applied restoration rebuilds vectors, participant profiles, KG, and counters. Failure restores
+both source location and derived state. Active filename conflicts stop before any write.
+
 ### 7. Coordinated atomic rebuild
 
 Rebuild vectors, KG, wiki, and run wiki lint under one exclusive dataset lock:

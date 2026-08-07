@@ -54,8 +54,9 @@
 - [x] Improve Windows E2E process output and cleanup. Child stages now run unbuffered with
   flushed labels, configurable per-stage timeouts, safe legacy-console output, and retrying
   cleanup for briefly locked SQLite files. `--keep-temp` preserves failures for inspection.
-- [ ] Add structured quarantine inspection and restore commands. Duplicate sources are preserved
-  safely now, but restoration still requires manual filesystem work.
+- [x] Add structured quarantine inspection and restore commands. `quarantine.py` lists batches,
+  exposes manifests, file counts and hashes, previews restoration by default, rejects filename
+  conflicts, and restores sources plus all affected derived layers transactionally with rollback.
 - [ ] Expand relationship/entity extraction beyond regex with conservative NER, coreference,
   confidence thresholds, and false-positive evaluation.
 - [ ] Add PII redaction/export policies. Current scanner flags PII but raw and training exports
