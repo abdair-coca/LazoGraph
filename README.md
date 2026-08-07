@@ -149,7 +149,21 @@ With `--atomic`, affected layers are snapshotted to a private temporary director
 restored after any failed stage or keyboard interruption. Omit the flag to keep successful
 partial stages when a later stage fails.
 
-### 8. End-to-end verification
+### 8. Diagnose persisted state
+
+Inspect every persisted layer without changing data:
+
+```bash
+python scripts/diagnose.py --slug sam
+python scripts/diagnose.py --slug sam --json
+```
+
+The report identifies the active knowledge root and dataset path, Git and dataset schema
+versions, source/message and participant totals, vector and KG counts, wiki lint health,
+latest export health, and cross-layer invariant failures. A critical health failure returns
+a non-zero exit code; stale or not-yet-built derived artifacts remain explicit warnings.
+
+### 9. End-to-end verification
 
 Run the complete workflow in a disposable dataset: initialize, dry-run, ingest,
 rebuild KG, build/lint wiki, query identities, export, validate counts, then remove

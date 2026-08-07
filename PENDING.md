@@ -2,9 +2,11 @@
 
 ## Optimization backlog from real end-to-end testing
 
-- [ ] Add a single `diagnose` command that prints the active knowledge root, dataset path,
+- [x] Add a single `diagnose` command that prints the active knowledge root, dataset path,
   Git/schema version, source counts, participant totals, vector counts, KG counts, and
-  wiki/export health. We initially queried a stale dataset state without enough diagnostics.
+  wiki/export health. `diagnose.py` now checks every persisted layer without mutation,
+  reports human-readable or JSON output, distinguishes stale/not-built warnings from corrupt
+  state, and exits non-zero for critical health failures.
 - [x] Reject WhatsApp system notices as senders at the ingestion boundary. Two notices
   (`end-to-end encryption` and `disappearing messages`) became one-message contacts and
   malformed KG entities. The WhatsApp parser now recognizes notices even when they contain
