@@ -24,6 +24,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from runtime import configure_safe_output
+
 from dataset_invariants import print_report as print_invariant_report
 from dataset_invariants import validate_dataset
 
@@ -34,6 +36,7 @@ KNOWLEDGE_ROOT = Path(os.environ.get(
 
 
 def main():
+    configure_safe_output()
     parser = argparse.ArgumentParser(description='Export dataset to training/ directory')
     parser.add_argument('--slug', required=True, help='Persona dataset slug')
     parser.add_argument('--output', default='training', help='Output directory (default: training/)')

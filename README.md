@@ -186,7 +186,9 @@ python scripts/e2e_test.py \
 ```
 
 Optional exact-count gates: `--expect-messages`, `--expect-persona-messages`, and
-`--expect-contact-messages`.
+`--expect-contact-messages`. Every child stage uses immediate unbuffered output and a
+900-second default timeout; override it with `--stage-timeout`. Temporary state is removed
+with Windows-safe retries. Use `--keep-temp` only when debugging a failed run.
 
 ## Supported sources
 

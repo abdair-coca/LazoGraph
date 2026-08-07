@@ -51,9 +51,9 @@
   semantic search, wiki lint, and export pair balance. `smoke_test.py` now runs all five probes,
   reports every failed layer, and is the final coordinated rebuild stage so atomic mode rolls
   back when rebuilt data is not functionally queryable.
-- [ ] Improve Windows E2E process output and cleanup. Buffered subprocess logs hid progress,
-  the first run exceeded a 120-second wrapper timeout, and one validation run temporarily held
-  `chroma.sqlite3` open during cleanup.
+- [x] Improve Windows E2E process output and cleanup. Child stages now run unbuffered with
+  flushed labels, configurable per-stage timeouts, safe legacy-console output, and retrying
+  cleanup for briefly locked SQLite files. `--keep-temp` preserves failures for inspection.
 - [ ] Add structured quarantine inspection and restore commands. Duplicate sources are preserved
   safely now, but restoration still requires manual filesystem work.
 - [ ] Expand relationship/entity extraction beyond regex with conservative NER, coreference,

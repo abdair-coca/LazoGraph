@@ -28,6 +28,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from runtime import configure_safe_output
+
 # Resolve adapters relative to this script's parent directory
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
@@ -58,6 +60,7 @@ SOURCE_EQUIVALENCE_MIN_SIZE_RATIO = 0.90
 
 
 def main():
+    configure_safe_output()
     parser = argparse.ArgumentParser(description='Ingest data into a persona dataset')
     parser.add_argument('--slug', required=True, help='Persona dataset slug')
     parser.add_argument('--source', help='Path to source file or directory')

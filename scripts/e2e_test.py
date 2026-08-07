@@ -2,13 +2,18 @@
 """Run a disposable end-to-end verification from raw source to training export."""
 
 import argparse
+import gc
 import json
 import os
+import shutil
 import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
+
+from runtime import configure_safe_output
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
@@ -16,6 +21,7 @@ CONTENT_PAGES = ('identity', 'voice', 'values', 'thinking', 'relationships', 'ti
 
 
 def main():
+    configure_safe_output()
     parser = argparse.ArgumentParser(description='Run disposable LazoGraph end-to-end test')
     parser.add_argument('--source', required=True, help='Raw source file or directory')
     parser.add_argument('--persona-name', required=True, help='Persona name used for role detection')
@@ -24,77 +30,96 @@ def main():
     parser.add_argument('--expect-messages', type=int)
     parser.add_argument('--expect-persona-messages', type=int)
     parser.add_argument('--expect-contact-messages', type=int)
+    parser.add_argument(
+        '--stage-timeout',
+        type=int,
+        default=900,
+        help='Maximum seconds per subprocess stage (default: 900)',
+    )
+    parser.add_argument(
+        '--keep-temp',
+        action='store_true',
+        help='Preserve disposable data for debugging',
+    )
     args = parser.parse_args()
+    if args.stage_timeout < 1:
+        parser.error('--stage-timeout must be at least 1 second')
 
     source = Path(args.source).expanduser().resolve()
     if not source.exists():
         print(f'Source not found: {source}', file=sys.stderr)
         sys.exit(1)
 
-    with tempfile.TemporaryDirectory(prefix='LazoGraph-e2e-') as temp:
-        root = Path(temp)
+    root = Path(tempfile.mkdtemp(prefix='LazoGraph-e2e-'))
+    summary = None
+    try:
         knowledge_root = root / 'knowledge'
         export_dir = root / 'training'
         slug = 'lazograph-e2e'
         env = os.environ.copy()
         env['PYTHONUTF8'] = '1'
+        env['PYTHONUNBUFFERED'] = '1'
         env['OPENPERSONA_KNOWLEDGE'] = str(knowledge_root)
 
-        _run('initialize', 'init_knowledge.py', '--slug', slug, '--name', args.persona_name, env=env)
-        _run(
+        def run(label: str, script: str, *arguments: str):
+            _run(
+                label,
+                script,
+                *arguments,
+                env=env,
+                timeout=args.stage_timeout,
+            )
+
+        run('initialize', 'init_knowledge.py', '--slug', slug, '--name', args.persona_name)
+        run(
             'parse dry-run',
             'ingest.py',
             '--slug', slug,
             '--source', str(source),
             '--persona-name', args.persona_name,
             '--dry-run',
-            env=env,
         )
-        _run(
+        run(
             'ingest',
             'ingest.py',
             '--slug', slug,
             '--source', str(source),
             '--persona-name', args.persona_name,
-            env=env,
         )
-        _run('rebuild KG', 'ingest.py', '--slug', slug, '--rebuild-kg', env=env)
-        _run('analyze wiki dry-run', 'build_wiki.py', '--slug', slug, '--dry-run', env=env)
-        _run('build wiki', 'build_wiki.py', '--slug', slug, env=env)
-        _run('lint wiki', 'lint_wiki.py', '--slug', slug, env=env)
+        run('rebuild KG', 'ingest.py', '--slug', slug, '--rebuild-kg')
+        run('analyze wiki dry-run', 'build_wiki.py', '--slug', slug, '--dry-run')
+        run('build wiki', 'build_wiki.py', '--slug', slug)
+        run('lint wiki', 'lint_wiki.py', '--slug', slug)
         if args.persona_query:
-            _run('query persona', 'query_kg.py', '--slug', slug, '--entity', args.persona_query, env=env)
+            run('query persona', 'query_kg.py', '--slug', slug, '--entity', args.persona_query)
         if args.contact_query:
-            _run('query contact', 'query_kg.py', '--slug', slug, '--entity', args.contact_query, env=env)
+            run('query contact', 'query_kg.py', '--slug', slug, '--entity', args.contact_query)
         if args.persona_query and args.contact_query:
-            _run(
+            run(
                 'query path',
                 'query_kg.py',
                 '--slug', slug,
                 '--path', args.persona_query, args.contact_query,
-                env=env,
             )
         if args.persona_query:
-            _run(
+            run(
                 'semantic query persona',
                 'query_memory.py',
                 '--slug', slug,
                 '--query', 'trabajo y proyectos',
                 '--participant', args.persona_query,
                 '--limit', '1',
-                env=env,
             )
         if args.contact_query:
-            _run(
+            run(
                 'semantic query contact',
                 'query_memory.py',
                 '--slug', slug,
                 '--query', 'conversación cotidiana',
                 '--participant', args.contact_query,
                 '--limit', '1',
-                env=env,
             )
-        _run('export', 'export_training.py', '--slug', slug, '--output', str(export_dir), env=env)
+        run('export', 'export_training.py', '--slug', slug, '--output', str(export_dir))
 
         summary = _validate(
             knowledge_root / slug,
@@ -103,6 +128,11 @@ def main():
             expect_persona_messages=args.expect_persona_messages,
             expect_contact_messages=args.expect_contact_messages,
         )
+    finally:
+        if args.keep_temp:
+            print(f'\nTemporary data preserved: {root}', flush=True)
+        else:
+            _cleanup_with_retries(root)
 
     print('\nE2E: PASS')
     print(f'  messages: {summary["messages"]}')
@@ -114,14 +144,38 @@ def main():
     print('  temporary data: removed')
 
 
-def _run(label: str, script: str, *arguments: str, env: dict):
-    print(f'\n[{label}]')
-    subprocess.run(
-        [sys.executable, str(SCRIPT_DIR / script), *arguments],
-        cwd=PROJECT_DIR,
-        env=env,
-        check=True,
-    )
+def _run(label: str, script: str, *arguments: str, env: dict, timeout: int = 900):
+    print(f'\n[{label}]', flush=True)
+    command = [sys.executable, '-u', str(SCRIPT_DIR / script), *arguments]
+    try:
+        subprocess.run(
+            command,
+            cwd=PROJECT_DIR,
+            env=env,
+            check=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f'Stage {label!r} exceeded {timeout} seconds: {" ".join(command)}'
+        ) from exc
+
+
+def _cleanup_with_retries(path: Path, *, attempts: int = 4) -> None:
+    """Remove disposable E2E state, tolerating briefly held Windows SQLite files."""
+    last_error = None
+    for attempt in range(attempts):
+        gc.collect()
+        try:
+            shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(0.25 * (2 ** attempt))
+    raise RuntimeError(f'Could not remove temporary E2E data after {attempts} attempts: {path}') from last_error
 
 
 def _validate(
