@@ -21,10 +21,12 @@ import os
 import re
 import shutil
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime import configure_safe_output
+from pii import merge_counts, redact_text, scan_export_inputs
 
 from dataset_invariants import print_report as print_invariant_report
 from dataset_invariants import validate_dataset
@@ -43,6 +45,12 @@ def main():
     parser.add_argument('--wiki-only', action='store_true', help='Only generate conversations from wiki (skip raw copy)')
     parser.add_argument('--version', help='Export version tag (default: auto-increment v1/v2/...)')
     parser.add_argument('--list', action='store_true', help='List export history and exit')
+    parser.add_argument(
+        '--pii-policy',
+        choices=('block', 'redact', 'allow'),
+        default='block',
+        help='PII handling: block (default), redact, or explicitly allow',
+    )
 
     args = parser.parse_args()
 
@@ -56,25 +64,52 @@ def main():
         _list_exports(dataset_dir)
         return
 
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     meta = json.loads((dataset_dir / 'dataset.json').read_text())
     slug = meta['slug']
     name = meta.get('name', slug)
+
+    pii_report = scan_export_inputs(dataset_dir, include_sources=not args.wiki_only)
+    if pii_report['total'] and args.pii_policy == 'block':
+        print(
+            f'PII policy blocked export: {pii_report["total"]} matches in '
+            f'{len(pii_report["affected_files"])} files '
+            f'({", ".join(pii_report["types"])}).',
+            file=sys.stderr,
+        )
+        print('Use --pii-policy redact, or --pii-policy allow after explicit review.', file=sys.stderr)
+        sys.exit(2)
+    if pii_report['total'] and args.pii_policy == 'allow':
+        print(f'WARNING: exporting {pii_report["total"]} detected PII matches unchanged.')
+
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    redaction_counts = Counter()
 
     print(f'📦 Exporting dataset: {name} ({slug})')
 
     # --- 1. Copy raw sources ---
     raw_stats = {'files': 0, 'messages': 0}
     if not args.wiki_only:
-        raw_stats = _copy_raw_sources(dataset_dir, output_dir)
+        raw_stats = _copy_raw_sources(
+            dataset_dir, output_dir,
+            pii_policy=args.pii_policy,
+            redaction_counts=redaction_counts,
+        )
 
     # --- 2. Generate conversations.jsonl from wiki ---
-    conv_count = _generate_conversations(dataset_dir, output_dir, name, wiki_only=args.wiki_only)
+    conv_count = _generate_conversations(
+        dataset_dir, output_dir, name,
+        wiki_only=args.wiki_only,
+        pii_policy=args.pii_policy,
+        redaction_counts=redaction_counts,
+    )
 
     # --- 3. Generate profile.md from wiki ---
-    _generate_profile(dataset_dir, output_dir, name, slug)
+    _generate_profile(
+        dataset_dir, output_dir, name, slug,
+        pii_policy=args.pii_policy,
+        redaction_counts=redaction_counts,
+    )
 
     # --- 4. Write metadata.json (with version fields) ---
     version      = args.version or _next_version(dataset_dir)
@@ -86,18 +121,31 @@ def main():
     if args.version and any(e.get('version') == args.version for e in existing):
         print(f'Warning: version {args.version} already exists in export_history', file=sys.stderr)
 
+    # --- 5. Generate probes.json for probe-based evaluation ---
+    _generate_probes(
+        dataset_dir, output_dir, name, slug,
+        pii_policy=args.pii_policy,
+        redaction_counts=redaction_counts,
+    )
+
+    pii_metadata = {
+        'policy': args.pii_policy,
+        'detected': pii_report,
+        'redacted': dict(sorted(redaction_counts.items())),
+    }
     _write_metadata(dataset_dir, output_dir, slug, name, raw_stats, conv_count,
-                    version, export_hash, src_snapshot)
+                    version, export_hash, src_snapshot, pii_metadata)
 
-    # --- 5. Quality report (rewrites metadata.json to add quality field) ---
+    # --- 6. Quality report (rewrites metadata.json to add quality field) ---
     quality = _compute_quality_report(output_dir)
-
-    # --- 6. Generate probes.json for probe-based evaluation ---
-    _generate_probes(dataset_dir, output_dir, name, slug)
 
     # --- 7. Append export history (after export is fully complete) ---
     _append_export_history(dataset_dir, version, export_hash, src_snapshot, conv_count,
-                           {'wiki_only': args.wiki_only})
+                           {
+                               'wiki_only': args.wiki_only,
+                               'pii_policy': args.pii_policy,
+                               'pii_detected': pii_report['types'],
+                           })
     print_invariant_report(
         validate_dataset(dataset_dir, export_dir=output_dir),
         strict=False,
@@ -109,6 +157,10 @@ def main():
     print(f'   conversations.jsonl: {conv_count} turns')
     print(f'   profile.md: generated')
     print(f'   metadata.json: generated')
+    print(
+        f'   PII policy: {args.pii_policy} '
+        f'({sum(redaction_counts.values())} replacements)'
+    )
     print(f'\n📊 Quality report:')
     print(f'   Role balance: {quality["assistant_turns"]} assistant / {quality["user_turns"]} user'
           f' (ratio {quality["role_ratio"]:.2f})')
@@ -119,7 +171,13 @@ def main():
         print(f'   Unique questions: {quality["unique_questions"]}')
 
 
-def _copy_raw_sources(dataset_dir: Path, output_dir: Path) -> dict:
+def _copy_raw_sources(
+    dataset_dir: Path,
+    output_dir: Path,
+    *,
+    pii_policy: str = 'allow',
+    redaction_counts: Counter | None = None,
+) -> dict:
     """Copy sources/ JSONL/TXT files to training/raw/."""
     raw_dir = output_dir / 'raw'
     raw_dir.mkdir(exist_ok=True)
@@ -134,7 +192,15 @@ def _copy_raw_sources(dataset_dir: Path, output_dir: Path) -> dict:
             continue
 
         dst = raw_dir / src_file.name
-        shutil.copy2(src_file, dst)
+        if pii_policy == 'redact':
+            content, counts = redact_text(
+                src_file.read_text(encoding='utf-8', errors='replace')
+            )
+            dst.write_text(content, encoding='utf-8')
+            if redaction_counts is not None:
+                merge_counts(redaction_counts, counts)
+        else:
+            shutil.copy2(src_file, dst)
         stats['files'] += 1
 
         if src_file.suffix == '.jsonl':
@@ -146,8 +212,15 @@ def _copy_raw_sources(dataset_dir: Path, output_dir: Path) -> dict:
     return stats
 
 
-def _generate_conversations(dataset_dir: Path, output_dir: Path, name: str,
-                            *, wiki_only: bool = False) -> int:
+def _generate_conversations(
+    dataset_dir: Path,
+    output_dir: Path,
+    name: str,
+    *,
+    wiki_only: bool = False,
+    pii_policy: str = 'allow',
+    redaction_counts: Counter | None = None,
+) -> int:
     """
     Generate conversations.jsonl from wiki pages and (optionally) source data.
 
@@ -191,6 +264,12 @@ def _generate_conversations(dataset_dir: Path, output_dir: Path, name: str,
         if sources_dir.exists():
             for jsonl_file in sorted(sources_dir.glob('*.jsonl')):
                 turns.extend(_load_source_dialogue(jsonl_file))
+
+    if pii_policy == 'redact':
+        for turn in turns:
+            turn['content'], counts = redact_text(turn['content'])
+            if redaction_counts is not None:
+                merge_counts(redaction_counts, counts)
 
     with open(conv_path, 'w', encoding='utf-8') as f:
         for turn in turns:
@@ -276,7 +355,15 @@ def _generate_question(page_name: str, section_title: str) -> str:
     return f'Tell me about your {topic}.'
 
 
-def _generate_profile(dataset_dir: Path, output_dir: Path, name: str, slug: str):
+def _generate_profile(
+    dataset_dir: Path,
+    output_dir: Path,
+    name: str,
+    slug: str,
+    *,
+    pii_policy: str = 'allow',
+    redaction_counts: Counter | None = None,
+):
     """Generate profile.md from wiki pages."""
     wiki_dir = dataset_dir / 'wiki'
     profile_path = output_dir / 'profile.md'
@@ -306,7 +393,12 @@ def _generate_profile(dataset_dir: Path, output_dir: Path, name: str, slug: str)
     if len(sections) <= 1:
         sections.append('(No wiki content available yet. Ingest data and build wiki first.)\n')
 
-    profile_path.write_text('\n'.join(sections), encoding='utf-8')
+    profile = '\n'.join(sections)
+    if pii_policy == 'redact':
+        profile, counts = redact_text(profile)
+        if redaction_counts is not None:
+            merge_counts(redaction_counts, counts)
+    profile_path.write_text(profile, encoding='utf-8')
     print(f'   profile.md: generated')
 
 
@@ -421,7 +513,8 @@ def _append_export_history(dataset_dir: Path, version: str, export_hash: str,
 
 def _write_metadata(dataset_dir: Path, output_dir: Path, slug: str, name: str,
                     raw_stats: dict, conv_count: int,
-                    version: str, export_hash: str, source_snapshot: dict):
+                    version: str, export_hash: str, source_snapshot: dict,
+                    pii_metadata: dict | None = None):
     total_words = _count_total_words(dataset_dir)
 
     # Load dataset.json for extra fields
@@ -438,7 +531,7 @@ def _write_metadata(dataset_dir: Path, output_dir: Path, slug: str, name: str,
         'export_version':  version,
         'export_hash':     export_hash,
         'source_snapshot': source_snapshot,
-        'source': f'persona-knowledge ({dataset_dir})',
+        'source': f'persona-knowledge:{slug}',
         'source_count': raw_stats['files'],
         'total_words': total_words,
         'raw_files': [
@@ -447,6 +540,7 @@ def _write_metadata(dataset_dir: Path, output_dir: Path, slug: str, name: str,
         ] if (dataset_dir / 'sources').exists() else [],
         'distilled_turns': conv_count,
         'total_estimated_turns': raw_stats.get('messages', 0) + conv_count,
+        'pii': pii_metadata or {'policy': 'allow', 'detected': {}, 'redacted': {}},
     }
 
     # Merge dataset.json stats
@@ -533,7 +627,15 @@ def _extract_wiki_keywords(wiki_dir: Path, page_name: str, max_chars: int = 20) 
     return [snippet] if snippet else []
 
 
-def _generate_probes(dataset_dir: Path, output_dir: Path, name: str, slug: str):
+def _generate_probes(
+    dataset_dir: Path,
+    output_dir: Path,
+    name: str,
+    slug: str,
+    *,
+    pii_policy: str = 'allow',
+    redaction_counts: Counter | None = None,
+):
     """Generate probes.json for keyword-based role consistency evaluation.
 
     The name probe (weight 1.0) checks if the model knows its own name.
@@ -578,6 +680,15 @@ def _generate_probes(dataset_dir: Path, output_dir: Path, name: str, slug: str):
         'slug': slug,
         'probes': probes,
     }
+    if pii_policy == 'redact':
+        for probe in probes:
+            redacted_keywords = []
+            for keyword in probe['keywords']:
+                redacted, counts = redact_text(str(keyword))
+                redacted_keywords.append(redacted)
+                if redaction_counts is not None:
+                    merge_counts(redaction_counts, counts)
+            probe['keywords'] = redacted_keywords
     probes_path = output_dir / 'probes.json'
     probes_path.write_text(json.dumps(probes_data, indent=2, ensure_ascii=False) + '\n')
     print(f'   probes.json: {len(probes)} probe(s) generated')

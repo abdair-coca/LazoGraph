@@ -30,6 +30,7 @@ from pathlib import Path
 
 from runtime import configure_safe_output
 from kg_extraction import extract_content_facts
+from pii import PII_PATTERNS
 
 # Resolve adapters relative to this script's parent directory
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -45,15 +46,6 @@ KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
     Path.home() / '.openpersona' / 'knowledge'
 ))
-
-# PII patterns (conservative — flag, don't block)
-PII_PATTERNS = [
-    (re.compile(r'\b\d{3}-\d{2}-\d{4}\b'), 'SSN'),
-    (re.compile(r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b'), 'credit_card'),
-    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'), 'email'),
-    (re.compile(r'\b(?:password|passwd|pwd)\s*[:=]\s*\S+', re.IGNORECASE), 'password'),
-    (re.compile(r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b'), 'phone'),
-]
 
 SOURCE_EQUIVALENCE_MIN_MESSAGES = 20
 SOURCE_EQUIVALENCE_MIN_OVERLAP = 0.95

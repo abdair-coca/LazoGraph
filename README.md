@@ -99,6 +99,17 @@ add nuance later while keeping the evidence protocol in `wiki/_schema.md`.
 python scripts/export_training.py --slug sam --output training/
 ```
 
+Exports block detected PII by default before creating output. Choose redaction for shareable
+artifacts; use `allow` only after explicit review:
+
+```bash
+python scripts/export_training.py --slug sam --output training/ --pii-policy redact
+python scripts/export_training.py --slug sam --output training/ --pii-policy allow
+```
+
+Redaction covers raw copies, conversations, profile, and probes. Original private dataset files
+remain unchanged. Export metadata records detected types, policy, and replacement totals.
+
 Output:
 
 ```
@@ -208,7 +219,8 @@ python scripts/e2e_test.py \
 Optional exact-count gates: `--expect-messages`, `--expect-persona-messages`, and
 `--expect-contact-messages`. Every child stage uses immediate unbuffered output and a
 900-second default timeout; override it with `--stage-timeout`. Temporary state is removed
-with Windows-safe retries. Use `--keep-temp` only when debugging a failed run.
+with Windows-safe retries. E2E exports use `--pii-policy redact` by default. Use `--keep-temp`
+only when debugging a failed run.
 
 ## Supported sources
 

@@ -61,8 +61,9 @@
   confidence thresholds, and false-positive evaluation. Extraction now combines known identities,
   contextual and multiword NER, two-message bounded pronoun resolution, numeric confidence with
   a strict acceptance floor, stop-token rejection, and labeled precision/recall/F1 evaluation.
-- [ ] Add PII redaction/export policies. Current scanner flags PII but raw and training exports
-  retain it unless the operator handles it separately.
+- [x] Add PII redaction/export policies. Export now blocks detected PII before creating output by
+  default; `redact` sanitizes raw copies, conversations, profile, and probes; `allow` requires an
+  explicit choice. Metadata records findings, policy, replacements, and omits private local paths.
 
 ## Resolved defects kept for regression context
 

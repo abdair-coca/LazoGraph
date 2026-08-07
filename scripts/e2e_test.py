@@ -31,6 +31,12 @@ def main():
     parser.add_argument('--expect-persona-messages', type=int)
     parser.add_argument('--expect-contact-messages', type=int)
     parser.add_argument(
+        '--pii-policy',
+        choices=('block', 'redact', 'allow'),
+        default='redact',
+        help='Training export PII policy used by E2E (default: redact)',
+    )
+    parser.add_argument(
         '--stage-timeout',
         type=int,
         default=900,
@@ -119,7 +125,13 @@ def main():
                 '--participant', args.contact_query,
                 '--limit', '1',
             )
-        run('export', 'export_training.py', '--slug', slug, '--output', str(export_dir))
+        run(
+            'export',
+            'export_training.py',
+            '--slug', slug,
+            '--output', str(export_dir),
+            '--pii-policy', args.pii_policy,
+        )
 
         summary = _validate(
             knowledge_root / slug,
