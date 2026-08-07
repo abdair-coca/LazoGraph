@@ -385,6 +385,7 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(kg.triples[0]['subject'], 'Alice')
         self.assertEqual(kg.triples[0]['predicate'], 'friend_of')
         self.assertEqual(kg.triples[0]['valid_from'], '2026-08-05')
+        self.assertEqual(kg.triples[0]['confidence'], 1.0)
         self.assertTrue(kg.closed)
 
     def test_vector_failure_stops_before_dedup_backup(self):

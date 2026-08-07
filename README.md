@@ -124,6 +124,14 @@ python scripts/query_kg.py --slug sam --stats
 python scripts/query_memory.py --slug sam --query "work projects" --participant "Sam"
 ```
 
+KG extraction combines explicit relationship cues with conservative person NER and bounded
+pronoun coreference. Every generated relationship carries numeric confidence; low-confidence
+candidates are rejected. Evaluate changes against labeled JSONL before rebuilding production:
+
+```bash
+python scripts/evaluate_kg_extraction.py --cases tests/fixtures/kg-cases.jsonl
+```
+
 Participant aliases are stored in private `participants.json` profiles. Repeated
 name variants can resolve to the same canonical person without mixing authorship.
 After upgrading an existing dataset, add sender metadata to its semantic index:

@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from runtime import configure_safe_output
+from kg_extraction import extract_content_facts
 
 # Resolve adapters relative to this script's parent directory
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -839,28 +840,6 @@ def _prune_mempalace(dataset_dir: Path, slug: str, messages: list[dict]) -> int:
 
 # --- Knowledge Graph extraction ---
 
-# Simple multilingual entity/relationship patterns for automatic extraction
-_NAME_TOKEN = r'[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+'
-_PERSON_NAME = rf'{_NAME_TOKEN}(?:\s+{_NAME_TOKEN})?'
-_PERSON_PATTERN = re.compile(
-    rf'\b(?:'
-    rf'[Mm]y\s+(?:friend|brother|sister|mom|dad|mother|father|wife|husband|partner|boss|colleague|coworker)|'
-    rf'[Mm]i\s+(?:amig[oa]|herman[oa]|mamá|madre|papá|padre|espos[oa]|pareja|jef[ea]|colega|compañer[oa](?:\s+de\s+trabajo)?)|'
-    rf'(?:with|told|asked|met|called|texted|emailed)|'
-    rf'(?:con|(?:le\s+)?dije\s+a|pregunté\s+a|conocí\s+a|llamé\s+a|escribí\s+a|hablé\s+con|mensajeé\s+a)'
-    rf')\s+({_PERSON_NAME})\b'
-)
-
-_RELATIONSHIP_PATTERNS = (
-    (re.compile(rf'\b(?:[Mm]y\s+friend|[Mm]i\s+amig[oa])\s+({_PERSON_NAME})\b'), 'friend_of'),
-    (re.compile(rf'\b(?:[Mm]y\s+(?:brother|sister)|[Mm]i\s+herman[oa])\s+({_PERSON_NAME})\b'), 'sibling_of'),
-    (re.compile(rf'\b(?:[Mm]y\s+(?:mom|dad|mother|father)|[Mm]i\s+(?:mamá|madre|papá|padre))\s+({_PERSON_NAME})\b'), 'parent_of'),
-    (re.compile(rf'\b(?:[Mm]y\s+(?:wife|husband)|[Mm]i\s+espos[oa])\s+({_PERSON_NAME})\b'), 'spouse_of'),
-    (re.compile(rf'\b(?:[Mm]y\s+partner|[Mm]i\s+pareja)\s+({_PERSON_NAME})\b'), 'partner_of'),
-    (re.compile(rf'\b(?:[Mm]y\s+boss|[Mm]i\s+jef[ea])\s+({_PERSON_NAME})\b'), 'reports_to'),
-    (re.compile(rf'\b(?:[Mm]y\s+(?:colleague|coworker)|[Mm]i\s+(?:colega|compañer[oa](?:\s+de\s+trabajo)?))\s+({_PERSON_NAME})\b'), 'colleague_of'),
-)
-
 _ROMANTIC_PARTNER_PATTERN = re.compile(
     r'\b(?:mi\s+(?:novia|novio|pareja)|amor\s+de\s+mi\s+vida|quiero\s+todo\s+contigo)\b',
     re.IGNORECASE,
@@ -873,7 +852,14 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
     entities = set()
     relationships_by_key = {}
 
-    def add_relationship(source: str, target: str, rel_type: str, msg: dict):
+    def add_relationship(
+        source: str,
+        target: str,
+        rel_type: str,
+        msg: dict,
+        *,
+        confidence: float = 1.0,
+    ):
         source = source.strip()
         target = target.strip()
         if not source or not target or source.casefold() == target.casefold():
@@ -883,14 +869,17 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
         if target.casefold() != slug.casefold():
             entities.add(target)
         key = (source.casefold(), target.casefold(), rel_type)
-        relationships_by_key.setdefault(key, {
+        candidate = {
             'from': source,
             'to': target,
             'type': rel_type,
-            'confidence': 'extracted',
+            'confidence': confidence,
             'timestamp': msg.get('timestamp'),
             'source': msg.get('source_file'),
-        })
+        }
+        current = relationships_by_key.get(key)
+        if current is None or confidence > current['confidence']:
+            relationships_by_key[key] = candidate
 
     participant_messages = {}
     assistant_names = {}
@@ -909,7 +898,7 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
     participants = {**user_names, **assistant_names}
     for key, name in participants.items():
         entities.add(name)
-        add_relationship(name, slug, 'participant_in', participant_messages[key])
+        add_relationship(name, slug, 'participant_in', participant_messages[key], confidence=1.0)
 
     for assistant_key, assistant_name in assistant_names.items():
         for user_key, user_name in user_names.items():
@@ -919,6 +908,7 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
                     user_name,
                     'communicates_with',
                     participant_messages[user_key],
+                    confidence=1.0,
                 )
 
     if len(assistant_names) == 1 and len(user_names) == 1:
@@ -937,23 +927,19 @@ def _extract_kg_triples(dataset_dir: Path, messages: list[dict]) -> dict:
                 user_name,
                 'romantic_partner',
                 romantic_evidence,
+                confidence=0.95,
             )
 
-    for msg in messages:
-        sender = str(msg.get('metadata', {}).get('sender', '')).strip()
-        if msg['role'] != 'assistant':
-            continue
-
-        content = msg['content']
-
-        for pattern, rel_type in _RELATIONSHIP_PATTERNS:
-            for match in pattern.finditer(content):
-                name = match.group(1)
-                add_relationship(name, sender or slug, rel_type, msg)
-
-        # General person mentions
-        for match in _PERSON_PATTERN.finditer(content):
-            entities.add(match.group(1))
+    extracted = extract_content_facts(messages, set(participants.values()))
+    entities.update(extracted['entities'])
+    for relationship in extracted['relationships']:
+        add_relationship(
+            relationship['from'],
+            relationship['to'] or slug,
+            relationship['type'],
+            relationship,
+            confidence=relationship['confidence'],
+        )
 
     relationships = list(relationships_by_key.values())
 
@@ -1153,7 +1139,7 @@ def _write_kg(palace_dir: Path, entities: set[str], relationships: list[dict]):
                     predicate=rel['type'],
                     obj=rel.get('to', ''),
                     valid_from=_kg_valid_from(rel.get('timestamp')),
-                    confidence=1.0,
+                    confidence=float(rel.get('confidence', 1.0)),
                     source_file=rel.get('source'),
                     adapter_name='persona-knowledge',
                 )

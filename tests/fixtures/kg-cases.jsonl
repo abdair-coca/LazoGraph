@@ -1,0 +1,6 @@
+{"text":"Hablé con Carla.","expected_entities":["Carla"]}
+{"text":"Luego, Diego Mendoza me llamó.","expected_entities":["Diego Mendoza"]}
+{"text":"Mi amiga Lucía vino.","expected_entities":["Lucía"]}
+{"text":"Mañana trabajo con bastante energía.","expected_entities":[]}
+{"text":"Buenas noches. Gracias por todo.","expected_entities":[]}
+{"text":"Viajamos a San Juan.","expected_entities":[]}

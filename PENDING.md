@@ -57,8 +57,10 @@
 - [x] Add structured quarantine inspection and restore commands. `quarantine.py` lists batches,
   exposes manifests, file counts and hashes, previews restoration by default, rejects filename
   conflicts, and restores sources plus all affected derived layers transactionally with rollback.
-- [ ] Expand relationship/entity extraction beyond regex with conservative NER, coreference,
-  confidence thresholds, and false-positive evaluation.
+- [x] Expand relationship/entity extraction beyond regex with conservative NER, coreference,
+  confidence thresholds, and false-positive evaluation. Extraction now combines known identities,
+  contextual and multiword NER, two-message bounded pronoun resolution, numeric confidence with
+  a strict acceptance floor, stop-token rejection, and labeled precision/recall/F1 evaluation.
 - [ ] Add PII redaction/export policies. Current scanner flags PII but raw and training exports
   retain it unless the operator handles it separately.
 
