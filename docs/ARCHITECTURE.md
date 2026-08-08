@@ -17,6 +17,7 @@ The system is deterministic where possible. LLM synthesis is not part of the cur
 source
   -> adapter parsing
   -> sender boundary validation
+  -> focal persona resolution
   -> PII scan
   -> equivalent-source preflight
   -> content deduplication
@@ -30,6 +31,13 @@ source
 ```
 
 ## Components
+
+### Product CLI
+
+`lazo import` owns Slice 1 orchestration. Its preflight parses without mutation, resolves exactly
+one focal participant, shows trust-relevant counts, and stops on ambiguity or equivalent backups.
+After confirmation it delegates initialization and persistence to existing script modules, then
+runs dataset invariants. Legacy `scripts/*.py` commands remain supported wrappers.
 
 ### Adapters
 

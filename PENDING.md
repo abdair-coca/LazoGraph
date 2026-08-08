@@ -2,9 +2,14 @@
 
 ## Active roadmap
 
-- [ ] Add a conversational RAG command that retrieves participant-filtered memories, KG paths,
-  and wiki evidence, then synthesizes cited answers through an explicit local Ollama or hosted
-  model policy. Current query commands return evidence but do not generate natural-language answers.
+- [ ] **Slice 1 — Import Chat: Awaiting Feedback.** Packaged `lazo import`, participant preview,
+  safe focal-person resolution, first-import confirmation, idempotent reimport, equivalent-source
+  preflight, compatibility wrappers, and final invariant validation are demo-ready. Development is
+  paused for user feedback; Slice 2 remains locked.
+
+The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
+their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.
+No later slice may start until the user writes the exact acceptance phrase for the current slice.
 
 ## Completed optimization backlog from real end-to-end testing
 

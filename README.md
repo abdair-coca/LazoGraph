@@ -18,6 +18,8 @@ LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/
 - Inspect and transactionally restore quarantined sources.
 - Export authentic user/assistant pairs with `block`, `redact`, or explicit `allow` PII policies.
 - Run a disposable end-to-end test on Windows, macOS, or Linux.
+- Preview and import a chat through the packaged `lazo import` command with explicit participant
+  selection and invariant validation.
 
 Current boundary: LazoGraph retrieves evidence through `query_memory.py` and `query_kg.py`; it does not yet synthesize natural-language answers. Conversational RAG is the next roadmap item.
 
@@ -55,7 +57,7 @@ See [Architecture](docs/ARCHITECTURE.md) for component boundaries, invariants, t
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install mempalace
+python -m pip install -e .
 ```
 
 On macOS/Linux, replace activation with `source .venv/bin/activate` and use `python` in the commands below.
@@ -69,28 +71,31 @@ $env:PYTHONUTF8='1'
 $env:OPENPERSONA_KNOWLEDGE="$env:LOCALAPPDATA\LazoGraph\knowledge"
 ```
 
-### 1. Initialize
+### 1. Preview the chat
 
 ```powershell
-python scripts/init_knowledge.py --slug sam --name "Samantha"
-```
-
-### 2. Validate and ingest
-
-Always inspect parsing first:
-
-```powershell
-python scripts/ingest.py `
+lazo import "C:\path\to\whatsapp.txt" `
   --slug sam `
-  --source "C:\path\to\whatsapp.txt" `
-  --adapter chat_export `
-  --persona-name "Samantha" `
+  --persona "Samantha" `
   --dry-run
 ```
 
-Remove `--dry-run` after counts and roles look correct:
+The preview shows adapter, participant candidates, persona/contact counts, rejected system notices,
+duplicates, PII flags, and equivalent backups. It never writes.
+
+### 2. Import
 
 ```powershell
+lazo import "C:\path\to\whatsapp.txt" --slug sam --persona "Samantha"
+```
+
+Confirm after reviewing the same preflight. The command initializes a missing dataset, imports all
+layers, then validates cross-layer invariants. Use `--yes` only for reviewed automation.
+
+Existing script commands remain supported:
+
+```powershell
+python scripts/init_knowledge.py --slug sam --name "Samantha"
 python scripts/ingest.py `
   --slug sam `
   --source "C:\path\to\whatsapp.txt" `
@@ -237,6 +242,7 @@ See [Source formats](references/source-formats.md) for details.
 
 | Script | Purpose |
 |---|---|
+| `lazo import` | Preview participants, safely initialize, import, and validate one chat |
 | `init_knowledge.py` | Initialize dataset or print basic stats |
 | `ingest.py` | Parse, deduplicate, store, reconcile, migrate, and rebuild |
 | `query_memory.py` | Participant-filtered semantic retrieval |
@@ -282,7 +288,12 @@ Private datasets, vector stores, imports, exports, virtual environments, and sec
 
 ## Project status and roadmap
 
-All defects discovered during the first real WhatsApp end-to-end validation are fixed and retained as regression coverage. See [PENDING.md](PENDING.md) for completed repair history and current roadmap.
+All defects discovered during the first real WhatsApp end-to-end validation are fixed and retained
+as regression coverage.
+
+Future product work follows the gated [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md). Each slice
+must reach a working demo, receive user feedback, and be explicitly accepted before the next slice
+starts. See [PENDING.md](PENDING.md) for the next active item and completed repair history.
 
 ## License
 

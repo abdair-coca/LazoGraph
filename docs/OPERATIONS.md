@@ -14,47 +14,41 @@ Keep this root outside the Git checkout.
 
 ## First import checklist
 
-1. Initialize dataset.
-2. Dry-run raw source.
-3. Confirm adapter, count, role split, sender names, and PII flags.
-4. Ingest once.
-5. Run atomic rebuild.
-6. Diagnose.
-7. Run smoke tests.
-8. Export with `redact` when sharing.
+1. Run packaged dry-run.
+2. Confirm adapter, participant candidates, role split, notices, duplicates, PII, and equivalence.
+3. Apply through the same command; a missing dataset initializes automatically.
+4. Re-run once to verify idempotency.
+5. Diagnose.
+6. Run smoke tests.
+7. Export with `redact` when sharing.
 
 ```powershell
-python scripts/init_knowledge.py --slug sam --name "Samantha"
-
-python scripts/ingest.py `
+lazo import "C:\private\chat.txt" `
   --slug sam `
-  --source "C:\private\chat.txt" `
-  --adapter chat_export `
-  --persona-name "Samantha" `
+  --persona "Samantha" `
   --dry-run
 
-python scripts/ingest.py `
-  --slug sam `
-  --source "C:\private\chat.txt" `
-  --adapter chat_export `
-  --persona-name "Samantha"
+lazo import "C:\private\chat.txt" --slug sam --persona "Samantha"
+lazo import "C:\private\chat.txt" --slug sam --persona "Samantha"
 
-python scripts/rebuild_all.py --slug sam --atomic
 python scripts/diagnose.py --slug sam
 python scripts/smoke_test.py --slug sam
 ```
 
+The second import must report zero new messages and leave the dataset unchanged. Existing
+`init_knowledge.py` and `ingest.py` workflows remain supported for advanced or legacy operation.
+
 ## Adding another source
 
-Run the same dry-run first. If equivalent-source preflight stops ingestion, do not use `--allow-equivalent-source` until confirming both backups represent intentionally separate data.
+Run `lazo import ... --dry-run` first. If equivalent-source preflight stops ingestion, do not use
+`--allow-equivalent-source` until confirming both backups represent intentionally separate data.
 
 To replace equivalent active backups:
 
 ```powershell
-python scripts/ingest.py `
+lazo import "C:\private\new-export.txt" `
   --slug sam `
-  --source "C:\private\new-export.txt" `
-  --persona-name "Samantha" `
+  --persona "Samantha" `
   --reconcile-equivalent-source `
   --dry-run
 ```

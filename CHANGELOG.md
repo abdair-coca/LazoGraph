@@ -1,5 +1,26 @@
 # Changelog — LazoGraph
 
+## [Unreleased]
+
+### Added
+
+- Packaged `lazo` entry point and Slice 1 `lazo import` command.
+- Non-mutating participant preview with exact focal-person resolution, counts, PII flags,
+  duplicates, rejected system notices, and equivalent-source warnings.
+- Automatic dataset initialization after confirmation plus final invariant validation.
+- Localized generic import fixture and Slice 1 CLI/integration regression coverage.
+
+### Changed
+
+- Existing adapters and ingestion remain the implementation boundary; `scripts/*.py` commands stay
+  compatible.
+- Reimporting the same source exits successfully without changing persisted data.
+
+### Fixed
+
+- Exact CLI persona roles no longer merge similarly named participants.
+- `init_knowledge.py --stats` no longer crashes on legacy Windows console code pages.
+
 ## [0.3.0] — 2026-08-07
 
 ### Added

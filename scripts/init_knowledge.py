@@ -15,8 +15,14 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from dataset_invariants import print_report as print_invariant_report
-from dataset_invariants import validate_dataset
+try:
+    from .dataset_invariants import print_report as print_invariant_report
+    from .dataset_invariants import validate_dataset
+    from .runtime import configure_safe_output
+except ImportError:
+    from dataset_invariants import print_report as print_invariant_report
+    from dataset_invariants import validate_dataset
+    from runtime import configure_safe_output
 
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
@@ -45,12 +51,12 @@ WIKI_PAGES = [
 ]
 
 
-def dataset_path(slug: str) -> Path:
-    return KNOWLEDGE_ROOT / slug
+def dataset_path(slug: str, *, knowledge_root: Path | None = None) -> Path:
+    return (knowledge_root or KNOWLEDGE_ROOT) / slug
 
 
-def init_dataset(slug: str, name: str) -> Path:
-    root = dataset_path(slug)
+def init_dataset(slug: str, name: str, *, knowledge_root: Path | None = None) -> Path:
+    root = dataset_path(slug, knowledge_root=knowledge_root)
     if root.exists():
         print(f'⚠️  Dataset already exists: {root}', file=sys.stderr)
         print('   Use --stats to inspect, or delete manually to re-init.', file=sys.stderr)
@@ -225,8 +231,8 @@ After KG updates, regenerate these pages from the graph data, then annotate.
 '''
 
 
-def show_stats(slug: str):
-    root = dataset_path(slug)
+def show_stats(slug: str, *, knowledge_root: Path | None = None):
+    root = dataset_path(slug, knowledge_root=knowledge_root)
     if not root.exists():
         print(f'❌ Dataset not found: {root}', file=sys.stderr)
         sys.exit(1)
@@ -271,7 +277,8 @@ def show_stats(slug: str):
         print(f'\n   Wiki: {populated}/{total} content pages populated')
 
 
-def main():
+def main(argv: list[str] | None = None):
+    configure_safe_output()
     parser = argparse.ArgumentParser(
         description='Initialize or inspect a persona dataset'
     )
@@ -279,7 +286,7 @@ def main():
     parser.add_argument('--name', help='Display name (required for init)')
     parser.add_argument('--stats', action='store_true', help='Show dataset statistics')
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.stats:
         show_stats(args.slug)

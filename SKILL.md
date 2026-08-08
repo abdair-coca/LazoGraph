@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Python 3.11+ and mempalace >= 3.1.0. Windows, macOS, and Linux."
 allowed-tools: Read Write Bash
 metadata:
-  version: "0.3.0"
+  version: "0.4.0"
   project: LazoGraph
   upstream: acnlabs/persona-knowledge
   requires: "python >= 3.11, mempalace >= 3.1.0"
@@ -44,17 +44,20 @@ export PYTHONUTF8=1
 export OPENPERSONA_KNOWLEDGE="$HOME/.local/share/LazoGraph/knowledge"
 ```
 
-## Phase 1: initialize
+## Phase 1: preview and import
 
 ```bash
-python scripts/init_knowledge.py --slug {slug} --name "Display Name"
+lazo import <path> --slug {slug} --persona "Display Name" --dry-run
+lazo import <path> --slug {slug} --persona "Display Name"
 ```
 
-Creates isolated metadata, participant profiles, MemPalace/ChromaDB storage, SQLite graph, source backup directory, and ten wiki pages.
+First command never writes. Second repeats preflight, asks for confirmation, initializes a missing
+dataset, imports every storage layer, and validates invariants. Reimporting the same source must
+report zero new messages without changing data.
 
-## Phase 2: inspect and ingest
+## Legacy or advanced ingestion
 
-First run:
+Existing scripts remain supported:
 
 ```bash
 python scripts/ingest.py \

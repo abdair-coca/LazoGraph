@@ -28,9 +28,20 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from runtime import configure_safe_output
-from kg_extraction import extract_content_facts
-from pii import PII_PATTERNS
+try:
+    from .runtime import configure_safe_output
+    from .kg_extraction import extract_content_facts
+    from .pii import PII_PATTERNS
+    from .dataset_invariants import print_report as print_invariant_report
+    from .dataset_invariants import validate_dataset
+    from .source_reconciliation import quarantine_sources
+except ImportError:
+    from runtime import configure_safe_output
+    from kg_extraction import extract_content_facts
+    from pii import PII_PATTERNS
+    from dataset_invariants import print_report as print_invariant_report
+    from dataset_invariants import validate_dataset
+    from source_reconciliation import quarantine_sources
 
 # Resolve adapters relative to this script's parent directory
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -38,10 +49,6 @@ SKILL_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(SKILL_DIR))
 
 from adapters import detect_adapter
-from dataset_invariants import print_report as print_invariant_report
-from dataset_invariants import validate_dataset
-from source_reconciliation import quarantine_sources
-
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
     Path.home() / '.openpersona' / 'knowledge'
@@ -52,13 +59,18 @@ SOURCE_EQUIVALENCE_MIN_OVERLAP = 0.95
 SOURCE_EQUIVALENCE_MIN_SIZE_RATIO = 0.90
 
 
-def main():
+def main(argv: list[str] | None = None, *, knowledge_root: Path | None = None):
     configure_safe_output()
     parser = argparse.ArgumentParser(description='Ingest data into a persona dataset')
     parser.add_argument('--slug', required=True, help='Persona dataset slug')
     parser.add_argument('--source', help='Path to source file or directory')
     parser.add_argument('--adapter', help='Force specific adapter (universal/chat_export/social)')
     parser.add_argument('--persona-name', default='', help='Persona display name (for role detection)')
+    parser.add_argument(
+        '--persona-exact',
+        action='store_true',
+        help='Match persona sender exactly after participant preflight',
+    )
     parser.add_argument('--since', help='Only ingest data after this date (ISO 8601)')
     parser.add_argument('--entity', help='Entity name for GBrain JSON export')
     parser.add_argument('--dry-run', action='store_true', help='Parse and report without writing')
@@ -90,9 +102,9 @@ def main():
         help='Update persisted vector metadata without recomputing embeddings',
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    dataset_dir = KNOWLEDGE_ROOT / args.slug
+    dataset_dir = (knowledge_root or KNOWLEDGE_ROOT) / args.slug
     if not dataset_dir.exists():
         print(f'❌ Dataset not found: {dataset_dir}', file=sys.stderr)
         print(f'   Run: python scripts/init_knowledge.py --slug {args.slug} --name "..."', file=sys.stderr)
@@ -178,6 +190,7 @@ def main():
 
     parse_kwargs = {
         'persona_name': args.persona_name,
+        'persona_exact': args.persona_exact,
         'since': args.since,
     }
     if args.entity:
