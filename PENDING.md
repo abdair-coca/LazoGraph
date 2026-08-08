@@ -2,10 +2,13 @@
 
 ## Active roadmap
 
-- [ ] **Slice 1 — Import Chat: Awaiting Feedback.** Packaged `lazo import`, participant preview,
-  safe focal-person resolution, first-import confirmation, idempotent reimport, equivalent-source
-  preflight, compatibility wrappers, and final invariant validation are demo-ready. Development is
-  paused for user feedback; Slice 2 remains locked.
+- [x] **Slice 1 — Import Chat: Accepted.** Packaged `lazo import`, participant preview, safe
+  focal-person resolution, confirmation, idempotent reimport, equivalent-source preflight,
+  compatibility wrappers, and final invariant validation passed automated and real-data testing.
+
+- [ ] **Slice 2 — Ask About a Person: In Progress.** Build participant-isolated semantic retrieval,
+  provider-neutral answer synthesis, validated citations, confidence, Spanish answers, and safe
+  abstention. Slice 3 remains locked.
 
 The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
 their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.

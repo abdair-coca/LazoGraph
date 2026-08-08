@@ -1,7 +1,7 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slice 1's `lazo import` command is implemented and awaiting user
-> feedback. Commands in Slices 2–8 remain planned and are not implemented. Existing
+> **Gated delivery document.** Slice 1's `lazo import` command is accepted. Slice 2 is in progress.
+> Commands in Slices 3–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -90,8 +90,8 @@ This table is the single source of truth for roadmap progress.
 
 | Slice | Capability | Status | Availability | Acceptance |
 |---:|---|---|---|---|
-| 1 | Import Chat | Awaiting Feedback | Demo ready | Pending |
-| 2 | Ask About a Person | Planned | Locked by Slice 1 | Pending |
+| 1 | Import Chat | Accepted | Available | Accepted |
+| 2 | Ask About a Person | In Progress | Active | Pending |
 | 3 | Add Manual Context | Planned | Locked by Slice 2 | Pending |
 | 4 | Correct Knowledge | Planned | Locked by Slice 3 | Pending |
 | 5 | Ask About Relationships | Planned | Locked by Slice 4 | Pending |
@@ -209,7 +209,7 @@ Plan status and dates are structured fields, not freeform graph entities.
 
 ## Slice 1 — Import Chat
 
-**Status:** Awaiting Feedback  
+**Status:** Accepted  
 **Dependency:** Current ingestion baseline  
 **Unlocks:** Slice 2
 
@@ -293,19 +293,19 @@ python scripts/diagnose.py --slug sample
 
 | Field | Value |
 |---|---|
-| Decision | Pending |
+| Decision | Accepted |
 | Required phrase | `Slice 1 accepted` |
-| Date | — |
-| Implementation commit | — |
-| Test results | — |
-| Demo command | — |
-| User notes | — |
+| Date | 2026-08-08 |
+| Implementation commit | `c6d90eb` |
+| Test results | 121 automated tests passed; localized fixture and equivalent-source regressions passed |
+| Demo command | `lazo import <chat> --slug sample --persona Samantha`; repeat import; run `diagnose.py` |
+| User notes | Real import, identity split, vectors, graph, diagnostics, and idempotent reimport confirmed |
 
 ---
 
 ## Slice 2 — Ask About a Person
 
-**Status:** Planned  
+**Status:** In Progress  
 **Dependency:** Slice 1 accepted  
 **Unlocks:** Slice 3
 
