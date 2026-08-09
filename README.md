@@ -24,10 +24,12 @@ LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/
   canonical alias isolation, confidence, and safe abstention.
 - Preview and apply manual context through `lazo context`, with explicit authority levels,
   source hashes, PII warnings, idempotency, rollback, and grounded retrieval.
+- Preview, apply, audit, and undo relationship corrections through an immutable ledger; effective
+  graph queries and grounded answers honor user corrections without altering generated triples.
 
-Current boundary: chat import and person-specific grounded answers are accepted. Manual context is
-demo-ready and awaiting feedback. Corrections, relationship synthesis, plans, and suggestions
-remain gated roadmap work.
+Current boundary: chat import, person-specific grounded answers, and manual context are accepted.
+Knowledge correction is demo-ready and awaiting feedback. Relationship synthesis, plans,
+suggestions, and relationship descriptions remain gated roadmap work.
 
 ## Architecture
 
@@ -179,7 +181,28 @@ The preview shows classification, subject, authority, confidence, duplicates, PI
 hash without writing. Apply stores normalized evidence and vectors, validates invariants, and rolls
 back newly created artifacts on failure. Repeating the same context leaves the dataset unchanged.
 
-### 6. Diagnose and smoke-test
+### 6. Correct generated relationship knowledge
+
+Corrections replace one existing relationship with another in the effective graph. Preview is
+mandatory before apply; ambiguous entities, unsupported relationship wording, and missing old
+claims write nothing.
+
+```powershell
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sam --dry-run
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sam --apply
+lazo corrections --slug sam list
+python scripts/query_kg.py --slug sam --entity Carlos
+```
+
+Generated SQLite triples and source backups remain unchanged. Each apply appends an auditable user
+assertion/retraction record under the private dataset. Effective graph reads and `lazo ask` give
+active corrections priority. Rebuilds preserve the ledger. Undo appends a reversal event:
+
+```powershell
+lazo corrections --slug sam undo <claim-id>
+```
+
+### 7. Diagnose and smoke-test
 
 ```powershell
 python scripts/diagnose.py --slug sam
@@ -189,7 +212,7 @@ python scripts/smoke_test.py --slug sam
 
 `diagnose.py` reports the active knowledge root, dataset path, Git/schema version, message and participant totals, vector count, graph health, wiki health, export health, and cross-layer invariants.
 
-### 7. Export safely
+### 8. Export safely
 
 Exports block detected PII by default before creating output:
 
@@ -219,7 +242,7 @@ training/
   probes.json
 ```
 
-### 8. Run full end-to-end verification
+### 9. Run full end-to-end verification
 
 ```powershell
 python scripts/e2e_test.py `
@@ -285,6 +308,8 @@ See [Source formats](references/source-formats.md) for details.
 | `lazo import` | Preview participants, safely initialize, import, and validate one chat |
 | `lazo ask` | Answer about one participant with isolated retrieval and validated citations |
 | `lazo context` | Preview or apply classified manual context with provenance and rollback |
+| `lazo correct` | Preview or apply one relationship replacement through an immutable ledger |
+| `lazo corrections` | List correction history or append a reversible undo event |
 | `init_knowledge.py` | Initialize dataset or print basic stats |
 | `ingest.py` | Parse, deduplicate, store, reconcile, migrate, and rebuild |
 | `query_memory.py` | Participant-filtered semantic retrieval |
@@ -313,6 +338,8 @@ ${OPENPERSONA_KNOWLEDGE}/{slug}/
   sources/
     .source-index.json
     quarantine/
+  corrections/
+    ledger.jsonl
   wiki/
     identity.md
     voice.md

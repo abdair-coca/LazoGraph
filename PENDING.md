@@ -14,8 +14,10 @@
   authority, PII/source-hash reporting, transactional persistence, idempotency, grounded citations,
   and invariant validation passed automated and end-to-end testing.
 
-- [ ] **Slice 4 — Correct Knowledge: In Progress.** Implementing safe correction previews, an
-  immutable ledger, effective graph reads, rebuild persistence, audit history, and undo.
+- [ ] **Slice 4 — Correct Knowledge: Awaiting Feedback.** Safe bilingual correction previews,
+  immutable assertion/retraction/supersede history, effective graph reads, grounded citations,
+  rebuild persistence, conflict protection, audit listing, and reversible undo passed automated
+  and disposable end-to-end testing. Slice 5 remains locked until `Slice 4 accepted`.
 
 The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
 their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.

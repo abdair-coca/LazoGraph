@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Python 3.11+ and mempalace >= 3.1.0. Windows, macOS, and Linux."
 allowed-tools: Read Write Bash
 metadata:
-  version: "0.6.0"
+  version: "0.7.0"
   project: LazoGraph
   upstream: acnlabs/persona-knowledge
   requires: "python >= 3.11, mempalace >= 3.1.0"
@@ -125,7 +125,33 @@ python scripts/ingest.py ... --reconcile-equivalent-source
 
 This quarantines equivalent active backups recoverably, stores the incoming authoritative replacement, and rebuilds all affected derived layers.
 
-## Phase 4: rebuild and verify
+## Phase 4: correct relationship knowledge
+
+Preview an exact relationship replacement first:
+
+```bash
+lazo correct "Carlos is Juan's cousin, not his brother" --slug {slug} --dry-run
+lazo correct "Carlos no es hermano de Juan, es su primo" --slug {slug} --dry-run
+```
+
+Confirm the resolved entities, old claim, retraction, assertion, PII flags, and fingerprint. Apply
+only if the statement represents the dataset owner's intended truth:
+
+```bash
+lazo correct "Carlos is Juan's cousin, not his brother" --slug {slug} --apply
+lazo corrections --slug {slug} list
+python scripts/query_kg.py --slug {slug} --entity Carlos
+```
+
+Corrections append to a private immutable ledger and override generated triples only in effective
+reads. Rebuilds preserve them. Repeating an active correction is a no-op; ambiguity, missing old
+claims, stale previews, locks, and corrupt ledger state fail without writes. Undo is append-only:
+
+```bash
+lazo corrections --slug {slug} undo <claim-id>
+```
+
+## Phase 5: rebuild and verify
 
 Preferred coordinated path:
 
@@ -153,7 +179,7 @@ python scripts/build_wiki.py --slug {slug}
 python scripts/lint_wiki.py --slug {slug}
 ```
 
-## Phase 5: retrieve knowledge
+## Phase 6: retrieve knowledge
 
 Semantic evidence:
 
@@ -173,9 +199,10 @@ python scripts/query_kg.py --slug {slug} --path "Name A" "Name B"
 python scripts/query_kg.py --slug {slug} --stats
 ```
 
-Current limitation: these commands retrieve evidence and graph facts. Natural-language answer synthesis/RAG is not implemented yet.
+`query_kg.py` reads the effective graph, including active user corrections. `query_memory.py`
+returns evidence rather than generated prose; use `lazo ask` for grounded person answers.
 
-## Phase 6: diagnose
+## Phase 7: diagnose
 
 ```bash
 python scripts/diagnose.py --slug {slug}
@@ -185,7 +212,7 @@ python scripts/smoke_test.py --slug {slug}
 
 Healthy completion requires matching source/message/profile/vector counts, readable graph, valid wiki, and five passing functional smoke probes.
 
-## Phase 7: recover sources
+## Phase 8: recover sources
 
 ```bash
 python scripts/quarantine.py --slug {slug} list
@@ -196,7 +223,7 @@ python scripts/quarantine.py --slug {slug} restore <batch> --apply
 
 Restore is a plan unless `--apply` is supplied. Apply refuses active filename conflicts, restores source-index metadata, rebuilds affected layers, and rolls back source plus derived state after failure.
 
-## Phase 8: export
+## Phase 9: export
 
 Default PII block:
 
@@ -225,7 +252,7 @@ metadata.json
 probes.json
 ```
 
-## Phase 9: end-to-end test
+## Phase 10: end-to-end test
 
 ```bash
 python scripts/e2e_test.py \

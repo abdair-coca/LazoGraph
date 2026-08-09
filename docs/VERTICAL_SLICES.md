@@ -1,6 +1,6 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1–3 are accepted. Slice 4 is in progress. Commands in
+> **Gated delivery document.** Slices 1–3 are accepted. Slice 4 is awaiting feedback. Commands in
 > Slices 5–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
@@ -34,10 +34,9 @@ LazoGraph already provides:
 - atomic rebuild, diagnosis, smoke tests, and disposable E2E validation;
 - authentic training exports with PII policies.
 
-The current runtime provides packaged `lazo import`, `lazo ask`, and `lazo context` commands for
-Slices 1–3. It does not yet provide:
+The current runtime provides packaged `lazo import`, `lazo ask`, `lazo context`, `lazo correct`,
+and `lazo corrections` commands for Slices 1–4. It does not yet provide:
 
-- a reversible correction ledger;
 - a structured plan model;
 - grounded suggestions or relationship synthesis.
 
@@ -91,7 +90,7 @@ This table is the single source of truth for roadmap progress.
 | 1 | Import Chat | Accepted | Available | Accepted |
 | 2 | Ask About a Person | Accepted | Available | Accepted |
 | 3 | Add Manual Context | Accepted | Available | Accepted |
-| 4 | Correct Knowledge | In Progress | Under development | Pending |
+| 4 | Correct Knowledge | Awaiting Feedback | Demo ready | Pending |
 | 5 | Ask About Relationships | Planned | Locked by Slice 4 | Pending |
 | 6 | Pending Plans | Planned | Locked by Slice 5 | Pending |
 | 7 | Grounded Suggestions | Planned | Locked by Slice 6 | Pending |
@@ -488,7 +487,7 @@ lazo ask "¿Cuándo cumple años Alex?" --about Alex
 
 ## Slice 4 — Correct Knowledge
 
-**Status:** In Progress
+**Status:** Awaiting Feedback
 **Dependency:** Slice 3 accepted  
 **Unlocks:** Slice 5
 
@@ -496,13 +495,13 @@ lazo ask "¿Cuándo cumple años Alex?" --about Alex
 
 Correct extracted knowledge safely, reversibly, and without losing the correction during rebuilds.
 
-### Target interfaces — implementation in progress
+### Implemented interfaces — awaiting feedback
 
 ```bash
-lazo correct "Carlos is Juan's cousin, not his brother" --dry-run
-lazo correct "Carlos is Juan's cousin, not his brother" --apply
-lazo corrections list
-lazo corrections undo <claim-id>
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sample --dry-run
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sample --apply
+lazo corrections --slug sample list
+lazo corrections --slug sample undo <claim-id>
 ```
 
 ### Flow
@@ -549,13 +548,21 @@ natural-language correction
 - Undo and audit-history test.
 - Integration test through person/graph answers.
 
-Planned demo:
+Demo-ready validation: 171 automated tests passed. The Slice 4 E2E test imports a localized chat,
+applies a correction, runs the actual five-stage atomic rebuild, verifies the ledger is byte-stable,
+queries the effective graph, obtains a correction-backed citation, undoes the correction, and
+confirms the generated claim becomes effective again.
+
+Demo:
 
 ```bash
-lazo correct "Carlos is Juan's cousin, not his brother" --dry-run
-lazo correct "Carlos is Juan's cousin, not his brother" --apply
-lazo corrections list
-lazo ask "¿Qué relación tiene Carlos con Juan?"
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sample --dry-run
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sample --apply
+lazo corrections --slug sample list
+python scripts/query_kg.py --slug sample --entity Carlos
+python scripts/rebuild_all.py --slug sample --atomic
+lazo ask "What relationship does Carlos have with Juan?" --about Carlos --slug sample
+lazo corrections --slug sample undo <claim-id>
 ```
 
 ### Feedback checklist

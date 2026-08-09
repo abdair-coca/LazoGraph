@@ -51,6 +51,13 @@ the hash, writes normalized `user_context` records and vectors, rebuilds profile
 then checks invariants. A failed apply restores metadata/source snapshots and removes only vectors
 created by that attempt.
 
+`lazo correct` owns Slice 4 orchestration. It parses one conservative English or Spanish
+relationship replacement, resolves both endpoints exactly, verifies the old claim against the
+effective graph, scans PII, and prints the exact assertion/retraction plan without writing. Apply
+revalidates the plan under an exclusive ledger lock and appends an immutable correction event.
+`lazo corrections list` exposes audit history; `lazo corrections undo <claim-id>` appends a
+reversal event rather than deleting history.
+
 ### Adapters
 
 Adapters emit one normalized schema:
@@ -103,6 +110,26 @@ Generated relationship confidence:
 
 Person extraction combines known participants, contextual cues, conservative multiword NER, stop-token rejection, and a minimum confidence threshold. Coreference expires after two messages from the same persona sender.
 
+### Effective knowledge and correction ledger
+
+Generated SQLite triples remain the rebuildable base graph. User corrections live separately in
+`corrections/ledger.jsonl`, a private append-only JSONL ledger. Each correction records stable
+semantic claim IDs, the original input, assertion, retraction, authority, timestamp, provenance,
+and superseded claim. Undo records reference earlier events and never erase them.
+
+```text
+effective graph = generated graph
+                - active retractions
+                + active user assertions
+```
+
+User assertions have confidence `1.0` and override generated claims only during reads. Stable claim
+IDs do not depend on source filenames or extraction timestamps, so rebuilding the generated graph
+does not orphan corrections. A ledger lock plus preview fingerprint prevents two stale previews
+from silently replacing the same claim differently. Corrupt or ambiguous correction state fails
+closed. `query_kg.py`, diagnosis, smoke tests, and person answers all consume the same effective
+projection.
+
 ### Grounded person answers
 
 Stable contracts live under `src/lazograph/domain/`:
@@ -117,9 +144,10 @@ the configured local endpoint. `hosted` requires explicit URL, model, and API ke
 whitelists minimal profile metadata and sends only the selected evidence budget. Missing, weak,
 contradictory, cross-participant, or uncitable evidence produces abstention or a hard error.
 
-Manual context remains subject-filtered like chat evidence. Local output labels it as stored
-evidence rather than claiming the subject authored it. Hosted providers receive only selected
-excerpts and safe provenance fields, never the local source path or source hash.
+Manual context and active corrections remain subject-filtered like chat evidence. Local output
+labels them as stored evidence rather than claiming the subject authored them. Correction evidence
+uses `source_type=user_correction`, `authority=user`, and an auditable claim ID. Hosted providers
+receive only selected excerpts and safe provenance fields, never local paths or source hashes.
 
 ### Wiki
 
@@ -196,8 +224,8 @@ Tests cover localized parsing, source equivalence, reconciliation, vector compat
 
 ## Privacy boundary
 
-Private data lives below `OPENPERSONA_KNOWLEDGE`, outside Git. Repository `.gitignore` excludes common local datasets, imports, vector stores, exports, virtual environments, and secrets.
+Private data lives below `OPENPERSONA_KNOWLEDGE`, outside Git. Repository `.gitignore` excludes common local datasets, correction ledgers, imports, vector stores, exports, virtual environments, and secrets.
 
-Semantic search and graph/wiki building are local. `query_memory.py` may download the configured embedding model on first use. Current runtime does not send retrieved evidence to an external LLM.
-
-Conversational RAG will require an explicit provider policy because local Ollama and hosted APIs have different privacy, cost, and quality boundaries.
+Semantic search and graph/wiki building are local. `query_memory.py` may download the configured
+embedding model on first use. The default answer provider is offline. Ollama stays local; hosted
+generation is opt-in and receives only the selected evidence budget.

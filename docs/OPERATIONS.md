@@ -118,6 +118,53 @@ PII is reported during preview and stored only after explicit `--apply`. The def
 remains offline. Explicit hosted mode receives only selected evidence and safe provenance, never
 the local context path or source hash.
 
+## Correct relationship knowledge
+
+Slice 4 corrects one existing relationship without modifying source backups or generated SQLite
+triples. The accepted input shape is a direct replacement in English or Spanish:
+
+```powershell
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sam --dry-run
+lazo correct "Carlos no es hermano de Juan, es su primo" --slug sam --dry-run
+```
+
+The parser recognizes a conservative relationship vocabulary: sibling, cousin, friend, romantic
+partner, coworker, spouse, parent, child, manager, and conversation partner. Entity aliases must
+resolve exactly. The old relationship must exist in the current effective graph. Unsupported or
+ambiguous input exits non-zero and writes nothing.
+
+Review the resolved entities, matched claim, retraction, assertion, PII flags, and preview
+fingerprint. Then apply the exact reviewed statement:
+
+```powershell
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sam --apply
+lazo corrections --slug sam list
+python scripts/query_kg.py --slug sam --entity Carlos
+lazo ask "What relationship does Carlos have with Juan?" --about Carlos --slug sam
+```
+
+Apply appends a user-authority correction to the private `corrections/ledger.jsonl`. Repeating an
+active correction is idempotent. If effective knowledge changed after preview, conflict detection
+stops the apply instead of overwriting newer intent.
+
+Verify rebuild persistence:
+
+```powershell
+python scripts/rebuild_all.py --slug sam --atomic
+python scripts/query_kg.py --slug sam --entity Carlos
+lazo corrections --slug sam list
+```
+
+Undo with the correction group ID or either nested claim ID printed by `list`:
+
+```powershell
+lazo corrections --slug sam undo <claim-id>
+python scripts/query_kg.py --slug sam --entity Carlos
+```
+
+Undo appends a reversal record. It restores the previous effective view while retaining the full
+audit trail. If the ledger is corrupt or locked, correction operations fail closed.
+
 ## Adding another source
 
 Run `lazo import ... --dry-run` first. If equivalent-source preflight stops ingestion, do not use
@@ -307,7 +354,8 @@ E2E retries briefly locked files automatically. Close external database viewers.
 
 ## Current product boundary
 
-LazoGraph imports chats, answers grounded questions about one participant, and adds auditable manual
-context. The default answer is conservative and extractive; Ollama or an explicitly configured
-hosted provider supplies generative synthesis. Natural-language corrections, relationship-wide
-answers, structured plans, suggestions, and relationship descriptions remain planned slices.
+LazoGraph imports chats, answers grounded questions about one participant, adds auditable manual
+context, and applies reversible relationship corrections through an immutable ledger. The default
+answer is conservative and extractive; Ollama or an explicitly configured hosted provider supplies
+generative synthesis. Relationship-wide answers, structured plans, suggestions, and relationship
+descriptions remain planned slices.

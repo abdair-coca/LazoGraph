@@ -19,6 +19,12 @@
 - Transactional manual-context persistence across source backup, Chroma vectors, participant
   profiles, dataset counters, and invariants, including failure rollback and idempotent reapply.
 - Manual-context citations in Slice 2 with provider-safe provenance and correct non-speaker wording.
+- Slice 4 `lazo correct` bilingual relationship replacement with non-mutating dry-run, strict
+  entity resolution, PII reporting, and stale-preview conflict protection.
+- Private append-only correction ledger with assertion/retraction/supersede records, audit listing,
+  idempotent apply, rebuild-safe effective graph projection, and reversible undo events.
+- Correction-backed answer evidence with participant isolation, user authority, and distinct
+  provenance from extracted messages and manual context.
 
 ### Changed
 
@@ -28,6 +34,8 @@
 - Semantic hits must pass canonical sender and persisted-source validation before generation.
 - Manual context import time is audit metadata rather than an event timestamp, preserving chat
   chronology.
+- Graph queries, diagnosis, smoke tests, and grounded answers read the effective graph while the
+  generated SQLite graph remains an unchanged rebuildable base layer.
 
 ### Fixed
 
