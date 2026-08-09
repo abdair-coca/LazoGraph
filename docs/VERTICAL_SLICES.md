@@ -548,10 +548,12 @@ natural-language correction
 - Undo and audit-history test.
 - Integration test through person/graph answers.
 
-Demo-ready validation: 171 automated tests passed. The Slice 4 E2E test imports a localized chat,
+Demo-ready validation: 177 automated tests passed. The Slice 4 E2E test imports a localized chat,
 applies a correction, runs the actual five-stage atomic rebuild, verifies the ledger is byte-stable,
 queries the effective graph, obtains a correction-backed citation, undoes the correction, and
-confirms the generated claim becomes effective again.
+confirms the generated claim becomes effective again. Feedback regression coverage verifies that
+expanded compound names map to their canonical participant without truncated entities, historical
+identity shadows are pruned, unique abbreviations resolve correctly, and real ambiguity fails.
 
 Demo:
 

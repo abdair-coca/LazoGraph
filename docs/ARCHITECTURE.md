@@ -97,6 +97,12 @@ Metadata-only migration updates sender metadata without submitting documents or 
 
 `participants.json` contains canonical name, identity type, aliases, role counts, activity range, and contributing sources. Exact sender evidence creates profiles. Conservative repeated-name heuristics add aliases without merging independently authored identities.
 
+Capitalized runs may contain up to six tokens so compound Hispanic names are not truncated. A long
+run is accepted only when its tokens map unambiguously to one known participant; unknown-name NER
+remains capped at three tokens. Rebuild removes historical orphan entities that are expanded
+shadows of a canonical participant. Entity queries prioritize a unique canonical participant
+prefix and reject abbreviations shared by multiple participants.
+
 ### Knowledge graph
 
 The SQLite graph stores entities and triples. Managed triples use adapter name `persona-knowledge`, allowing rebuilds to replace generated relationships while preserving manual triples.

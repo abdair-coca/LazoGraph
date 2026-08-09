@@ -8,7 +8,8 @@ LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/
 
 - Import WhatsApp, Telegram, Signal, iMessage, social archives, Markdown, JSON/JSONL, CSV, PDF, and Obsidian vaults.
 - Parse localized Spanish WhatsApp timestamps, multiline messages, and narrow/non-breaking spaces.
-- Identify the persona and contacts independently; resolve stable aliases without mixing authorship.
+- Identify the persona and contacts independently; canonicalize expanded compound names and resolve
+  stable aliases without mixing authorship.
 - Deduplicate messages and detect equivalent source backups before they corrupt derived layers.
 - Store verbatim memories in MemPalace/ChromaDB and search them semantically by participant.
 - Build a SQLite knowledge graph with participant, communication, relationship, entity, and confidence data.

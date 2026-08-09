@@ -41,6 +41,9 @@
 
 - Exact CLI persona roles no longer merge similarly named participants.
 - `init_knowledge.py --stats` no longer crashes on legacy Windows console code pages.
+- Expanded compound names that contain one known participant no longer create truncated orphan
+  entities. KG rebuild removes historical identity shadows, unique participant prefixes resolve to
+  the canonical profile, and genuinely ambiguous abbreviations fail explicitly.
 
 ## [0.3.0] — 2026-08-07
 
