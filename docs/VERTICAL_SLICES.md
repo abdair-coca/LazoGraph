@@ -1,7 +1,7 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1 and 2 are accepted. Slice 3 is awaiting feedback. Commands in
-> Slices 4–8 remain planned and are not implemented. Existing
+> **Gated delivery document.** Slices 1–3 are accepted. Commands in Slices 4–8 remain planned and
+> are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -90,8 +90,8 @@ This table is the single source of truth for roadmap progress.
 |---:|---|---|---|---|
 | 1 | Import Chat | Accepted | Available | Accepted |
 | 2 | Ask About a Person | Accepted | Available | Accepted |
-| 3 | Add Manual Context | Awaiting Feedback | Demo ready | Pending |
-| 4 | Correct Knowledge | Planned | Locked by Slice 3 | Pending |
+| 3 | Add Manual Context | Accepted | Available | Accepted |
+| 4 | Correct Knowledge | Planned | Unlocked; not started | Pending |
 | 5 | Ask About Relationships | Planned | Locked by Slice 4 | Pending |
 | 6 | Pending Plans | Planned | Locked by Slice 5 | Pending |
 | 7 | Grounded Suggestions | Planned | Locked by Slice 6 | Pending |
@@ -395,7 +395,7 @@ lazo ask "¿Qué cosas le gustan a Alex?" --about Alex
 
 ## Slice 3 — Add Manual Context
 
-**Status:** Awaiting Feedback
+**Status:** Accepted
 **Dependency:** Slice 2 accepted  
 **Unlocks:** Slice 4
 
@@ -404,7 +404,7 @@ lazo ask "¿Qué cosas le gustan a Alex?" --about Alex
 Add user-provided context through the same privacy, provenance, retrieval, and consistency system
 used by imported sources.
 
-### Implemented interface — awaiting feedback
+### Implemented interface
 
 ```bash
 lazo context context.txt --slug sample --dry-run
@@ -466,23 +466,23 @@ lazo ask "¿Cuándo cumple años Alex?" --about Alex
 
 ### Feedback checklist
 
-- [ ] Preview clearly distinguishes text from assertions.
-- [ ] Authority level matches user intent.
-- [ ] Added context appears correctly in answers.
-- [ ] Provenance is understandable.
-- [ ] Apply semantics feel safe.
+- [x] Preview clearly distinguishes text from assertions.
+- [x] Authority level matches user intent.
+- [x] Added context appears correctly in answers.
+- [x] Provenance is understandable.
+- [x] Apply semantics feel safe.
 
 ### Acceptance record
 
 | Field | Value |
 |---|---|
-| Decision | Pending |
+| Decision | Accepted |
 | Required phrase | `Slice 3 accepted` |
-| Date | — |
-| Implementation commit | — |
-| Test results | — |
-| Demo command | — |
-| User notes | — |
+| Date | 2026-08-09 |
+| Implementation commit | `334bd4d` |
+| Test results | 151 automated tests passed; temporary ChromaDB import/context/ask/idempotency E2E passed |
+| Demo command | `lazo context <file> --slug sample --dry-run`; apply; ask; repeat apply; diagnose |
+| User notes | Classification, authority, provenance, grounded retrieval, and safe apply behavior approved |
 
 ---
 
