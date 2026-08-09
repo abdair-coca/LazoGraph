@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""Slice 4 correction parsing and dry-run tests."""
+
+import json
+import os
+import sqlite3
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from lazograph.cli import build_parser, main
+from lazograph.features.correct_knowledge import (
+    CorrectionValidationError,
+    build_correction_preview,
+)
+
+
+class CorrectionFixture(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name) / "knowledge"
+        self.dataset = self.root / "sample"
+        palace = self.dataset / ".mempalace" / "palace"
+        palace.mkdir(parents=True)
+        self.dataset.joinpath("dataset.json").write_text(
+            json.dumps({"slug": "sample", "name": "Samantha"}), encoding="utf-8"
+        )
+        self.dataset.joinpath("participants.json").write_text(
+            json.dumps({"participants": [
+                {"name": "Carlos", "aliases": ["Carlitos"]},
+                {"name": "Juan", "aliases": ["Juanito"]},
+            ]}),
+            encoding="utf-8",
+        )
+        connection = sqlite3.connect(palace / "knowledge_graph.sqlite3")
+        connection.execute("CREATE TABLE entities (id TEXT PRIMARY KEY, name TEXT)")
+        connection.executemany(
+            "INSERT INTO entities VALUES (?, ?)",
+            [("1", "Carlos"), ("2", "Juan")],
+        )
+        connection.execute(
+            "CREATE TABLE triples (subject TEXT, predicate TEXT, object TEXT, "
+            "confidence REAL, source_file TEXT, valid_from TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO triples VALUES (?, ?, ?, ?, ?, ?)",
+            ("1", "sibling_of", "2", 0.84, "chat.jsonl", "2026-01-01T00:00:00"),
+        )
+        connection.commit()
+        connection.close()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+
+class TestCorrectionPreview(CorrectionFixture):
+    def test_english_correction_resolves_exact_claim(self):
+        preview = build_correction_preview(
+            "Carlos is Juan's cousin, not his brother",
+            self.dataset,
+        )
+        self.assertEqual(preview.retract.predicate, "sibling_of")
+        self.assertEqual(preview.assert_claim.predicate, "cousin_of")
+        self.assertEqual(preview.assert_claim.subject, "Carlos")
+        self.assertEqual(preview.assert_claim.object, "Juan")
+        self.assertEqual(len(preview.matched_claims), 1)
+        self.assertRegex(preview.fingerprint, r"^sha256:[0-9a-f]{64}$")
+
+    def test_spanish_correction_and_aliases_resolve_canonically(self):
+        preview = build_correction_preview(
+            "Carlitos no es hermano de Juanito, es su primo",
+            self.dataset,
+        )
+        self.assertEqual(preview.retract.subject, "Carlos")
+        self.assertEqual(preview.retract.object, "Juan")
+        self.assertEqual(preview.retract.predicate, "sibling_of")
+        self.assertEqual(preview.assert_claim.predicate, "cousin_of")
+
+    def test_unknown_relation_and_missing_claim_are_rejected(self):
+        with self.assertRaisesRegex(CorrectionValidationError, "Unsupported relationship"):
+            build_correction_preview(
+                "Carlos is Juan's wizard, not his brother", self.dataset
+            )
+        with self.assertRaisesRegex(CorrectionValidationError, "No effective"):
+            build_correction_preview(
+                "Carlos is Juan's cousin, not his friend", self.dataset
+            )
+
+    def test_ambiguous_partial_entity_is_rejected(self):
+        payload = json.loads(
+            self.dataset.joinpath("participants.json").read_text(encoding="utf-8")
+        )
+        payload["participants"].append({"name": "Carlota", "aliases": []})
+        self.dataset.joinpath("participants.json").write_text(json.dumps(payload), encoding="utf-8")
+        connection = sqlite3.connect(
+            self.dataset / ".mempalace" / "palace" / "knowledge_graph.sqlite3"
+        )
+        connection.execute("INSERT INTO entities VALUES (?, ?)", ("3", "Carlota"))
+        connection.commit()
+        connection.close()
+        with self.assertRaisesRegex(CorrectionValidationError, "ambiguous"):
+            build_correction_preview(
+                "Carl is Juan's cousin, not his brother", self.dataset
+            )
+
+    def test_dry_run_does_not_mutate_dataset(self):
+        before = {
+            path.relative_to(self.dataset): path.read_bytes()
+            for path in self.dataset.rglob("*") if path.is_file()
+        }
+        with patch.dict(os.environ, {"OPENPERSONA_KNOWLEDGE": str(self.root)}):
+            result = main([
+                "correct",
+                "Carlos no es hermano de Juan, es su primo",
+                "--slug",
+                "sample",
+                "--dry-run",
+            ])
+        after = {
+            path.relative_to(self.dataset): path.read_bytes()
+            for path in self.dataset.rglob("*") if path.is_file()
+        }
+        self.assertEqual(result, 0)
+        self.assertEqual(after, before)
+
+
+class TestCorrectionCLI(unittest.TestCase):
+    def test_correct_requires_exactly_one_action(self):
+        parser = build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["correct", "text", "--slug", "sample"])
+        with self.assertRaises(SystemExit):
+            parser.parse_args([
+                "correct", "text", "--slug", "sample", "--dry-run", "--apply"
+            ])
+
+
+if __name__ == "__main__":
+    unittest.main()

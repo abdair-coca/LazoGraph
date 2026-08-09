@@ -13,6 +13,10 @@ from lazograph.features.add_context import (
     apply_context,
     build_context_preview,
 )
+from lazograph.features.correct_knowledge import (
+    CorrectionValidationError,
+    build_correction_preview,
+)
 from lazograph.infrastructure.llm import (
     HostedProvider,
     LocalExtractiveProvider,
@@ -121,6 +125,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Persist context after a successful preflight",
     )
     context_parser.set_defaults(handler=_run_context)
+
+    correct_parser = commands.add_parser(
+        "correct",
+        help="Preview or apply an auditable knowledge correction",
+    )
+    correct_parser.add_argument("text", help="Natural-language relationship correction")
+    correct_parser.add_argument("--slug", required=True, help="Dataset identifier")
+    correct_action = correct_parser.add_mutually_exclusive_group(required=True)
+    correct_action.add_argument("--dry-run", action="store_true", help="Preview without writing")
+    correct_action.add_argument("--apply", action="store_true", help="Append to correction ledger")
+    correct_parser.set_defaults(handler=_run_correct)
     return parser
 
 
@@ -355,6 +370,41 @@ def _run_context(args: argparse.Namespace) -> int:
     print(f"  Source backup: sources/{result.source_file}")
     print("  Dataset invariants: passed")
     return 0
+
+
+def _print_correction_preview(preview) -> None:
+    print("Knowledge correction preflight")
+    print(f"  Dataset: {preview.dataset_slug}")
+    print(f"  Fingerprint: {preview.fingerprint}")
+    print(f"  Matched effective claims: {len(preview.matched_claims)}")
+    for claim in preview.matched_claims:
+        print(
+            f"    - {claim.subject} --{claim.predicate}--> {claim.object}; "
+            f"confidence={claim.confidence:.2f}; source={claim.source or 'unknown'}"
+        )
+    print(
+        f"  Retract: {preview.retract.subject} --{preview.retract.predicate}--> "
+        f"{preview.retract.object}"
+    )
+    print(
+        f"  Assert: {preview.assert_claim.subject} --{preview.assert_claim.predicate}--> "
+        f"{preview.assert_claim.object}; confidence=1.00; authority=user"
+    )
+
+
+def _run_correct(args: argparse.Namespace) -> int:
+    try:
+        dataset_dir = resolve_dataset(args.slug)
+        preview = build_correction_preview(args.text, dataset_dir)
+    except (ConfigurationError, CorrectionValidationError, RuntimeError, OSError) as exc:
+        print(f"Correction rejected: {exc}", file=sys.stderr)
+        return 2
+    _print_correction_preview(preview)
+    if args.dry_run:
+        print("Dry run complete. No files written.")
+        return 0
+    print("Correction apply is not available in this implementation increment.", file=sys.stderr)
+    return 2
 
 
 def main(argv: list[str] | None = None) -> int:
