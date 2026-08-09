@@ -71,6 +71,53 @@ Hosted mode sends the question, canonical participant name, selected evidence, a
 profile metadata. It never sends the full dataset. Provider errors and invalid citations exit
 non-zero without changing knowledge.
 
+## Add manual context
+
+Write UTF-8 text or Markdown with blank lines between records:
+
+```text
+ASSERT: Alex's birthday is March 14.
+
+CONTEXT: Alex mentioned flowers while discussing gifts.
+
+INFERENCE: Alex may prefer tulips.
+```
+
+Preview first:
+
+```powershell
+lazo context "C:\private\context.txt" --slug sam --dry-run
+```
+
+The preview must show the expected subject, record kind, authority, confidence, duplicate count,
+PII flags, and SHA-256 source hash. `ASSERT`, `ASSERTION`, `FACT`, `HECHO`, and `AFIRMACION` are
+explicit user assertions at confidence `1.0`. `CONTEXT`, `NOTE`, their Spanish equivalents, and
+unprefixed blocks are freeform at `0.75`. `INFERENCE` and `INFERENCIA` remain inferences at `0.5`.
+
+If text does not name exactly one known participant, set the subject explicitly:
+
+```powershell
+lazo context "C:\private\context.txt" --slug sam --about Alex --dry-run
+```
+
+Apply only after reviewing the same file:
+
+```powershell
+lazo context "C:\private\context.txt" --slug sam --apply
+lazo ask "When is Alex's birthday?" --about Alex --slug sam
+lazo context "C:\private\context.txt" --slug sam --apply
+python scripts/diagnose.py --slug sam
+```
+
+The second apply must report `Already stored` and leave every dataset file unchanged. Apply stores
+normalized context and vectors locally, records source hash/authorship/authority, and validates
+cross-layer invariants. If persistence or validation fails, the command restores managed files and
+deletes only vectors introduced by the failed attempt.
+
+PII is reported during preview and stored only after explicit `--apply`. The default answer provider
+remains offline. Explicit hosted mode receives only selected evidence and safe provenance, never
+the local context path or source hash.
+
 ## Adding another source
 
 Run `lazo import ... --dry-run` first. If equivalent-source preflight stops ingestion, do not use
@@ -260,4 +307,7 @@ E2E retries briefly locked files automatically. Close external database viewers.
 
 ## Current product boundary
 
-LazoGraph can retrieve relevant memories and graph facts, but it does not generate a synthesized conversational answer. A future `ask`/chat layer should combine semantic retrieval, graph context, wiki context, citations, and an explicit local-or-hosted model privacy policy.
+LazoGraph imports chats, answers grounded questions about one participant, and adds auditable manual
+context. The default answer is conservative and extractive; Ollama or an explicitly configured
+hosted provider supplies generative synthesis. Natural-language corrections, relationship-wide
+answers, structured plans, suggestions, and relationship descriptions remain planned slices.

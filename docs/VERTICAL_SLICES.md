@@ -1,6 +1,6 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1 and 2 are accepted. Slice 3 is in progress. Commands in
+> **Gated delivery document.** Slices 1 and 2 are accepted. Slice 3 is awaiting feedback. Commands in
 > Slices 4–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
@@ -34,11 +34,9 @@ LazoGraph already provides:
 - atomic rebuild, diagnosis, smoke tests, and disposable E2E validation;
 - authentic training exports with PII policies.
 
-The current runtime now provides the packaged `lazo import` command for Slice 1. It does not yet
-provide:
+The current runtime provides packaged `lazo import`, `lazo ask`, and `lazo context` commands for
+Slices 1–3. It does not yet provide:
 
-- LLM-backed answers with citations;
-- manual context authority semantics;
 - a reversible correction ledger;
 - a structured plan model;
 - grounded suggestions or relationship synthesis.
@@ -92,7 +90,7 @@ This table is the single source of truth for roadmap progress.
 |---:|---|---|---|---|
 | 1 | Import Chat | Accepted | Available | Accepted |
 | 2 | Ask About a Person | Accepted | Available | Accepted |
-| 3 | Add Manual Context | In Progress | Under development | Pending |
+| 3 | Add Manual Context | Awaiting Feedback | Demo ready | Pending |
 | 4 | Correct Knowledge | Planned | Locked by Slice 3 | Pending |
 | 5 | Ask About Relationships | Planned | Locked by Slice 4 | Pending |
 | 6 | Pending Plans | Planned | Locked by Slice 5 | Pending |
@@ -397,7 +395,7 @@ lazo ask "¿Qué cosas le gustan a Alex?" --about Alex
 
 ## Slice 3 — Add Manual Context
 
-**Status:** In Progress
+**Status:** Awaiting Feedback
 **Dependency:** Slice 2 accepted  
 **Unlocks:** Slice 4
 
@@ -406,7 +404,7 @@ lazo ask "¿Qué cosas le gustan a Alex?" --about Alex
 Add user-provided context through the same privacy, provenance, retrieval, and consistency system
 used by imported sources.
 
-### Target interface — implementation in progress
+### Implemented interface — awaiting feedback
 
 ```bash
 lazo context context.txt --slug sample --dry-run
@@ -455,7 +453,10 @@ manual source
 - Retrieval/citation integration test.
 - PII block/redaction policy tests appropriate to storage and provider boundaries.
 
-Planned demo:
+Demo-ready validation: 151 automated tests passed, including a real temporary ChromaDB flow for
+chat import, context apply, grounded citation, invariant validation, and unchanged repeat apply.
+
+Demo:
 
 ```bash
 lazo context sample-context.txt --slug sample --dry-run

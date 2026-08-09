@@ -10,8 +10,9 @@
   provider-neutral synthesis, persisted citations, confidence, Spanish output, contradiction
   handling, and safe abstention passed automated and real-data testing.
 
-- [ ] **Slice 3 — Add Manual Context: In Progress.** Implementing preview/apply semantics,
-  user-context provenance, idempotency, semantic retrieval, and invariant validation.
+- [ ] **Slice 3 — Add Manual Context: Awaiting Feedback.** Preview/apply semantics, classified
+  authority, PII/source-hash reporting, transactional persistence, idempotency, grounded citations,
+  and invariant validation are demo-ready. Development is paused; Slice 4 remains locked.
 
 The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
 their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.

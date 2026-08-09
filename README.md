@@ -22,9 +22,12 @@ LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/
   selection and invariant validation.
 - Ask grounded questions about one participant through `lazo ask`, with persisted citations,
   canonical alias isolation, confidence, and safe abstention.
+- Preview and apply manual context through `lazo context`, with explicit authority levels,
+  source hashes, PII warnings, idempotency, rollback, and grounded retrieval.
 
-Current boundary: person-specific grounded answers are demo-ready. Relationship-wide synthesis,
-manual context, corrections, plans, and suggestions remain gated roadmap work.
+Current boundary: chat import and person-specific grounded answers are accepted. Manual context is
+demo-ready and awaiting feedback. Corrections, relationship synthesis, plans, and suggestions
+remain gated roadmap work.
 
 ## Architecture
 
@@ -149,7 +152,34 @@ Optional local generation uses `--provider ollama`. Hosted generation requires e
 
 `query_memory.py` returns ranked evidence, not a generated answer. Participant aliases resolve to canonical names before ChromaDB filtering.
 
-### 5. Diagnose and smoke-test
+### 5. Add manual context
+
+Separate records with a blank line. Use a prefix to state the intended authority:
+
+```text
+ASSERT: Alex's birthday is March 14.
+
+CONTEXT: Alex mentioned flowers while discussing gifts.
+
+INFERENCE: Alex may prefer tulips.
+```
+
+`ASSERT`, `FACT`, or `HECHO` creates an explicit user assertion with confidence `1.0`.
+`CONTEXT`, `NOTE`, or unprefixed text remains freeform context with confidence `0.75`.
+`INFERENCE` remains an identified inference with confidence `0.5`.
+
+```powershell
+lazo context "C:\private\context.txt" --slug sam --dry-run
+lazo context "C:\private\context.txt" --slug sam --apply
+lazo ask "When is Alex's birthday?" --about Alex --slug sam
+```
+
+Each record must name exactly one known participant. Use `--about Alex` when the subject is implicit.
+The preview shows classification, subject, authority, confidence, duplicates, PII flags, and source
+hash without writing. Apply stores normalized evidence and vectors, validates invariants, and rolls
+back newly created artifacts on failure. Repeating the same context leaves the dataset unchanged.
+
+### 6. Diagnose and smoke-test
 
 ```powershell
 python scripts/diagnose.py --slug sam
@@ -159,7 +189,7 @@ python scripts/smoke_test.py --slug sam
 
 `diagnose.py` reports the active knowledge root, dataset path, Git/schema version, message and participant totals, vector count, graph health, wiki health, export health, and cross-layer invariants.
 
-### 6. Export safely
+### 7. Export safely
 
 Exports block detected PII by default before creating output:
 
@@ -189,7 +219,7 @@ training/
   probes.json
 ```
 
-### 7. Run full end-to-end verification
+### 8. Run full end-to-end verification
 
 ```powershell
 python scripts/e2e_test.py `
@@ -254,6 +284,7 @@ See [Source formats](references/source-formats.md) for details.
 |---|---|
 | `lazo import` | Preview participants, safely initialize, import, and validate one chat |
 | `lazo ask` | Answer about one participant with isolated retrieval and validated citations |
+| `lazo context` | Preview or apply classified manual context with provenance and rollback |
 | `init_knowledge.py` | Initialize dataset or print basic stats |
 | `ingest.py` | Parse, deduplicate, store, reconcile, migrate, and rebuild |
 | `query_memory.py` | Participant-filtered semantic retrieval |

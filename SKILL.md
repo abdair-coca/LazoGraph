@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Python 3.11+ and mempalace >= 3.1.0. Windows, macOS, and Linux."
 allowed-tools: Read Write Bash
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
   project: LazoGraph
   upstream: acnlabs/persona-knowledge
   requires: "python >= 3.11, mempalace >= 3.1.0"
@@ -101,6 +101,22 @@ evidence is weak, contradictory, or unavailable. `--provider ollama` enables loc
 `--provider hosted` requires explicit endpoint/model/key configuration and sends only selected
 evidence. Never use an unfiltered retrieval result to answer about a named participant.
 
+## Phase 3: add manual context
+
+```bash
+lazo context <context.txt> --slug {slug} --dry-run
+lazo context <context.txt> --slug {slug} --apply
+```
+
+Separate records with blank lines. Prefix explicit assertions with `ASSERT:`, freeform notes with
+`CONTEXT:`, and user-declared inferences with `INFERENCE:`. Unprefixed text remains freeform. Every
+record must resolve to exactly one known participant; use `--about` for an implicit subject.
+
+Review subject, kind, authority, confidence, duplicates, PII flags, and source hash before apply.
+Explicit assertions alone receive confidence `1.0`. Apply persists normalized `user_context`
+evidence and vectors, validates invariants, and rolls back new artifacts on failure. Repeat apply
+to verify it reports no changes. Manual context is searchable and citable through `lazo ask`.
+
 If an equivalent source exists, stop by default. Use:
 
 ```bash
@@ -109,7 +125,7 @@ python scripts/ingest.py ... --reconcile-equivalent-source
 
 This quarantines equivalent active backups recoverably, stores the incoming authoritative replacement, and rebuilds all affected derived layers.
 
-## Phase 3: rebuild and verify
+## Phase 4: rebuild and verify
 
 Preferred coordinated path:
 
@@ -137,7 +153,7 @@ python scripts/build_wiki.py --slug {slug}
 python scripts/lint_wiki.py --slug {slug}
 ```
 
-## Phase 4: retrieve knowledge
+## Phase 5: retrieve knowledge
 
 Semantic evidence:
 
@@ -159,7 +175,7 @@ python scripts/query_kg.py --slug {slug} --stats
 
 Current limitation: these commands retrieve evidence and graph facts. Natural-language answer synthesis/RAG is not implemented yet.
 
-## Phase 5: diagnose
+## Phase 6: diagnose
 
 ```bash
 python scripts/diagnose.py --slug {slug}
@@ -169,7 +185,7 @@ python scripts/smoke_test.py --slug {slug}
 
 Healthy completion requires matching source/message/profile/vector counts, readable graph, valid wiki, and five passing functional smoke probes.
 
-## Phase 6: recover sources
+## Phase 7: recover sources
 
 ```bash
 python scripts/quarantine.py --slug {slug} list
@@ -180,7 +196,7 @@ python scripts/quarantine.py --slug {slug} restore <batch> --apply
 
 Restore is a plan unless `--apply` is supplied. Apply refuses active filename conflicts, restores source-index metadata, rebuilds affected layers, and rolls back source plus derived state after failure.
 
-## Phase 7: export
+## Phase 8: export
 
 Default PII block:
 
@@ -209,7 +225,7 @@ metadata.json
 probes.json
 ```
 
-## Phase 8: end-to-end test
+## Phase 9: end-to-end test
 
 ```bash
 python scripts/e2e_test.py \

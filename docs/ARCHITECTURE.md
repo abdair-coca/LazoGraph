@@ -16,7 +16,7 @@ boundary; offline extractive synthesis is the default.
 
 ```text
 source
-  -> adapter parsing
+  -> adapter parsing or manual-context classification
   -> sender boundary validation
   -> focal persona resolution
   -> PII scan
@@ -44,6 +44,13 @@ runs dataset invariants. Legacy `scripts/*.py` commands remain supported wrapper
 inside vector retrieval, rejects mismatched or unpersisted hits, ranks a bounded evidence set,
 adds safe KG/wiki metadata, calls an `LLMProvider`, then validates every returned citation.
 
+`lazo context` owns Slice 3 orchestration. Its dry-run separates UTF-8 blocks, classifies explicit
+assertions, freeform notes, and declared inferences, resolves exactly one canonical subject per
+record, scans PII, computes a full source hash, and checks exact deduplication. Apply revalidates
+the hash, writes normalized `user_context` records and vectors, rebuilds profiles and counters,
+then checks invariants. A failed apply restores metadata/source snapshots and removes only vectors
+created by that attempt.
+
 ### Adapters
 
 Adapters emit one normalized schema:
@@ -60,6 +67,12 @@ Adapters emit one normalized schema:
 ```
 
 The persona is represented as `assistant`; other conversation participants are `user`. `metadata.sender` preserves independent authorship.
+
+Manual context uses `source_type=user_context`. For participant-isolated retrieval,
+`metadata.sender` and `metadata.subject` name the person the evidence concerns;
+`metadata.authored_by=dataset_owner` preserves actual authorship. `record_kind`, `authority`,
+`confidence`, `source_sha256`, record number, and import time keep the evidence auditable. The
+import time is not used as the event timestamp, so manual additions do not extend chat chronology.
 
 ### Source backups
 
@@ -94,7 +107,8 @@ Person extraction combines known participants, contextual cues, conservative mul
 
 Stable contracts live under `src/lazograph/domain/`:
 
-- `Evidence`: persisted message ID, sender, source, timestamp, excerpt, score.
+- `Evidence`: persisted message ID, subject/sender, source, timestamp, excerpt, score, and optional
+  manual-context provenance.
 - `Answer`: text, validated Evidence citations, confidence, entities, retrieval summary.
 - `LLMProvider`: provider-neutral generation from selected evidence and whitelisted metadata.
 
@@ -102,6 +116,10 @@ Default `local` mode quotes only verified evidence and never uses network access
 the configured local endpoint. `hosted` requires explicit URL, model, and API key; prompt assembly
 whitelists minimal profile metadata and sends only the selected evidence budget. Missing, weak,
 contradictory, cross-participant, or uncitable evidence produces abstention or a hard error.
+
+Manual context remains subject-filtered like chat evidence. Local output labels it as stored
+evidence rather than claiming the subject authored it. Hosted providers receive only selected
+excerpts and safe provenance fields, never the local source path or source hash.
 
 ### Wiki
 

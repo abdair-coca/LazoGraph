@@ -14,6 +14,11 @@
 - Provider-neutral `LLMProvider` implementations: offline extractive default, local Ollama, and an
   explicitly configured evidence-only hosted boundary.
 - Abstention for missing, weak, contradictory, or topic-mismatched evidence.
+- Slice 3 `lazo context` with dry-run/apply semantics, explicit assertion/freeform/inference
+  classification, subject resolution, source hashes, authorship, authority, and confidence.
+- Transactional manual-context persistence across source backup, Chroma vectors, participant
+  profiles, dataset counters, and invariants, including failure rollback and idempotent reapply.
+- Manual-context citations in Slice 2 with provider-safe provenance and correct non-speaker wording.
 
 ### Changed
 
@@ -21,6 +26,8 @@
   compatible.
 - Reimporting the same source exits successfully without changing persisted data.
 - Semantic hits must pass canonical sender and persisted-source validation before generation.
+- Manual context import time is audit metadata rather than an event timestamp, preserving chat
+  chronology.
 
 ### Fixed
 
