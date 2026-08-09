@@ -25,6 +25,15 @@ KNOWLEDGE_ROOT = Path(os.environ.get(
 ))
 
 
+class AmbiguousEntityError(ValueError):
+    """Raised when an abbreviated entity query has multiple valid matches."""
+
+    def __init__(self, query: str, matches: list[str]):
+        self.query = query
+        self.matches = sorted(matches, key=str.casefold)
+        super().__init__(f'Ambiguous entity "{query}": {", ".join(self.matches)}')
+
+
 def main():
     parser = argparse.ArgumentParser(description='Query the persona Knowledge Graph')
     parser.add_argument('--slug', required=True, help='Persona dataset slug')
@@ -266,7 +275,11 @@ def _query_entity(
     profiles: list[dict] | None = None,
     as_json: bool,
 ):
-    matched = _resolve_entity(name, entities, profiles or [])
+    try:
+        matched = _resolve_entity(name, entities, profiles or [])
+    except AmbiguousEntityError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
     if not matched:
         print(f'No entity matching "{name}"', file=sys.stderr)
         sys.exit(1)
@@ -312,8 +325,12 @@ def _query_entity(
 def _query_path(start: str, end: str, entities: set[str],
                 relationships: list[dict], *, profiles: list[dict] | None = None,
                 as_json: bool):
-    start_match = _resolve_entity(start, entities, profiles or [])
-    end_match = _resolve_entity(end, entities, profiles or [])
+    try:
+        start_match = _resolve_entity(start, entities, profiles or [])
+        end_match = _resolve_entity(end, entities, profiles or [])
+    except AmbiguousEntityError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
 
     if not start_match:
         print(f'No entity matching "{start}"', file=sys.stderr)
@@ -423,12 +440,25 @@ def _fuzzy_match(query: str, entities: set[str]) -> str | None:
             return entity
     # Prefer human-style names beginning with the query. This keeps "Abdair"
     # mapped to "Abdair Coca" instead of a dataset slug like "abdair-e2e".
-    for entity in sorted(entities, key=str.casefold):
-        if entity.casefold().startswith(f'{q} '):
-            return entity
-    for entity in entities:
-        if q in entity.casefold() or entity.casefold() in q:
-            return entity
+    prefix_matches = sorted(
+        (entity for entity in entities if entity.casefold().startswith(f'{q} ')),
+        key=str.casefold,
+    )
+    if len(prefix_matches) == 1:
+        return prefix_matches[0]
+    if len(prefix_matches) > 1:
+        raise AmbiguousEntityError(query, prefix_matches)
+    contains_matches = sorted(
+        (
+            entity for entity in entities
+            if q in entity.casefold() or entity.casefold() in q
+        ),
+        key=str.casefold,
+    )
+    if len(contains_matches) == 1:
+        return contains_matches[0]
+    if len(contains_matches) > 1:
+        raise AmbiguousEntityError(query, contains_matches)
     return None
 
 
@@ -443,6 +473,18 @@ def _resolve_entity(query: str, entities: set[str], profiles: list[dict]) -> str
         if any(str(alias).casefold().strip() == normalized for alias in aliases):
             canonical = str(profile.get('name', '')).strip()
             return _fuzzy_match(canonical, entities)
+    profile_prefixes = sorted(
+        {
+            str(profile.get('name', '')).strip()
+            for profile in profiles
+            if str(profile.get('name', '')).casefold().startswith(f'{normalized} ')
+        },
+        key=str.casefold,
+    )
+    if len(profile_prefixes) == 1:
+        return _fuzzy_match(profile_prefixes[0], entities)
+    if len(profile_prefixes) > 1:
+        raise AmbiguousEntityError(query, profile_prefixes)
     return _fuzzy_match(query, entities)
 
 

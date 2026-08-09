@@ -133,9 +133,10 @@ def _rebuild_derived_layers(dataset_dir: Path, slug: str) -> dict:
     removed = ingest._prune_mempalace(dataset_dir, slug, messages)
     stored = ingest._store_in_mempalace(dataset_dir, slug, messages, show_progress=True)
     cleared = ingest._clear_managed_kg(dataset_dir)
-    pruned = ingest._prune_invalid_kg_entities(dataset_dir)
+    profiles = ingest._write_participant_profiles(dataset_dir, messages)
+    canonical_names = {profile['name'] for profile in profiles}
+    pruned = ingest._prune_invalid_kg_entities(dataset_dir, canonical_names)
     kg_stats = ingest._extract_kg_triples(dataset_dir, messages)
-    ingest._write_participant_profiles(dataset_dir, messages)
     ingest._replace_stats(dataset_dir, messages, kg_stats)
     invariants = validate_dataset(dataset_dir)
     if not invariants['ok']:

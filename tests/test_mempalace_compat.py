@@ -572,6 +572,31 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertNotIn((malformed,), names)
         self.assertIn((malformed + ' referenced',), names)
 
+    def test_rebuild_prunes_historical_identity_shadow_orphan(self):
+        db_path = self.dataset / '.mempalace' / 'palace' / 'knowledge_graph.sqlite3'
+        db_path.parent.mkdir(parents=True)
+        connection = sqlite3.connect(db_path)
+        connection.execute('CREATE TABLE entities (id TEXT PRIMARY KEY, name TEXT)')
+        connection.execute('CREATE TABLE triples (subject TEXT, object TEXT)')
+        connection.executemany(
+            'INSERT INTO entities (id, name) VALUES (?, ?)',
+            [
+                ('persona', 'Abdair Coca'),
+                ('shadow', 'Abdair Alison Coca'),
+                ('unrelated', 'Gisel'),
+            ],
+        )
+        connection.commit()
+        connection.close()
+
+        pruned = ingest._prune_invalid_kg_entities(self.dataset, {'Abdair Coca', 'Alizon'})
+
+        connection = sqlite3.connect(db_path)
+        names = {row[0] for row in connection.execute('SELECT name FROM entities')}
+        connection.close()
+        self.assertEqual(pruned, 1)
+        self.assertEqual(names, {'Abdair Coca', 'Gisel'})
+
     def test_query_loader_discovers_direct_participant_relationship(self):
         profiles = [
             {'name': 'Abdair', 'identity_type': 'persona'},
@@ -613,6 +638,31 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         )
 
         self.assertEqual(matched, 'Alizon')
+
+    def test_entity_resolution_prefers_unique_canonical_participant_prefix(self):
+        matched = query_kg._resolve_entity(
+            'Abdair',
+            {'Abdair Coca', 'Abdair Alison Coca', 'Alizon'},
+            [
+                {'name': 'Abdair Coca', 'aliases': ['Abdair Coca']},
+                {'name': 'Alizon', 'aliases': ['Alizon']},
+            ],
+        )
+
+        self.assertEqual(matched, 'Abdair Coca')
+
+    def test_entity_resolution_rejects_ambiguous_participant_prefix(self):
+        with self.assertRaises(query_kg.AmbiguousEntityError) as raised:
+            query_kg._resolve_entity(
+                'Maria',
+                {'Maria Lopez', 'Maria Perez'},
+                [
+                    {'name': 'Maria Lopez', 'aliases': ['Maria Lopez']},
+                    {'name': 'Maria Perez', 'aliases': ['Maria Perez']},
+                ],
+            )
+
+        self.assertEqual(raised.exception.matches, ['Maria Lopez', 'Maria Perez'])
 
     def test_repeated_contact_name_variant_is_inferred_as_alias(self):
         profiles = [

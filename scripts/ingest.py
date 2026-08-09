@@ -30,14 +30,14 @@ from pathlib import Path
 
 try:
     from .runtime import configure_safe_output
-    from .kg_extraction import extract_content_facts
+    from .kg_extraction import canonical_known_identity, extract_content_facts
     from .pii import PII_PATTERNS
     from .dataset_invariants import print_report as print_invariant_report
     from .dataset_invariants import validate_dataset
     from .source_reconciliation import quarantine_sources
 except ImportError:
     from runtime import configure_safe_output
-    from kg_extraction import extract_content_facts
+    from kg_extraction import canonical_known_identity, extract_content_facts
     from pii import PII_PATTERNS
     from dataset_invariants import print_report as print_invariant_report
     from dataset_invariants import validate_dataset
@@ -118,9 +118,10 @@ def main(argv: list[str] | None = None, *, knowledge_root: Path | None = None):
         print(f'🔄 Rebuilding Knowledge Graph from {len(messages)} stored messages...')
         cleared = _clear_managed_kg(dataset_dir)
         print(f'   Cleared: {cleared} managed relationships')
-        pruned = _prune_invalid_kg_entities(dataset_dir)
-        print(f'   Pruned: {pruned} invalid orphan entities')
-        _write_participant_profiles(dataset_dir, messages)
+        profiles = _write_participant_profiles(dataset_dir, messages)
+        canonical_names = {profile['name'] for profile in profiles}
+        pruned = _prune_invalid_kg_entities(dataset_dir, canonical_names)
+        print(f'   Pruned: {pruned} invalid or identity-shadow orphan entities')
         kg_stats = _extract_kg_triples(dataset_dir, messages)
         _set_kg_stats(dataset_dir, kg_stats)
         invariants_ok = print_invariant_report(validate_dataset(dataset_dir))
@@ -531,9 +532,10 @@ def _run_equivalent_source_reconciliation(
         show_progress=True,
     )
     cleared_relationships = _clear_managed_kg(dataset_dir)
-    pruned_entities = _prune_invalid_kg_entities(dataset_dir)
+    profiles = _write_participant_profiles(dataset_dir, authoritative_messages)
+    canonical_names = {profile['name'] for profile in profiles}
+    pruned_entities = _prune_invalid_kg_entities(dataset_dir, canonical_names)
     kg_stats = _extract_kg_triples(dataset_dir, authoritative_messages)
-    _write_participant_profiles(dataset_dir, authoritative_messages)
     _replace_stats(dataset_dir, authoritative_messages, kg_stats)
     invariants = validate_dataset(dataset_dir)
     invariants_ok = print_invariant_report(invariants)
@@ -1131,22 +1133,32 @@ def _clear_managed_kg(dataset_dir: Path) -> int:
         connection.close()
 
 
-def _prune_invalid_kg_entities(dataset_dir: Path) -> int:
-    """Delete malformed orphan entities left by historical parser failures."""
+def _prune_invalid_kg_entities(
+    dataset_dir: Path,
+    canonical_names: set[str] | None = None,
+) -> int:
+    """Delete malformed or canonical-identity-shadow orphan entities."""
     db_path = dataset_dir / '.mempalace' / 'palace' / 'knowledge_graph.sqlite3'
     if not db_path.exists():
         return 0
     connection = sqlite3.connect(db_path)
     try:
-        cursor = connection.execute(
-            "DELETE FROM entities "
-            "WHERE (length(name) > 120 OR instr(name, char(10)) > 0 "
-            "OR instr(name, char(13)) > 0) "
-            "AND id NOT IN (SELECT subject FROM triples) "
+        rows = connection.execute(
+            "SELECT id, name FROM entities "
+            "WHERE id NOT IN (SELECT subject FROM triples) "
             "AND id NOT IN (SELECT object FROM triples)"
-        )
+        ).fetchall()
+        remove_ids = []
+        for entity_id, name in rows:
+            malformed = len(name) > 120 or '\n' in name or '\r' in name
+            canonical = canonical_known_identity(name, canonical_names or set())
+            identity_shadow = canonical is not None and canonical.casefold() != name.casefold()
+            if malformed or identity_shadow:
+                remove_ids.append((entity_id,))
+        if remove_ids:
+            connection.executemany('DELETE FROM entities WHERE id = ?', remove_ids)
         connection.commit()
-        return max(cursor.rowcount, 0)
+        return len(remove_ids)
     except sqlite3.OperationalError:
         return 0
     finally:
