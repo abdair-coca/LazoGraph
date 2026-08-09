@@ -14,6 +14,11 @@ class Evidence:
     timestamp: str | None
     excerpt: str
     score: float
+    source_type: str = ""
+    record_kind: str = ""
+    authority: str = ""
+    authored_by: str = ""
+    confidence: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

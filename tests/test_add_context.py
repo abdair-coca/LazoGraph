@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from lazograph.cli import build_parser, main
 from lazograph.features.add_context import ContextValidationError, build_context_preview
+from lazograph.features.add_context import apply_context
 
 
 class ContextFixture(unittest.TestCase):
@@ -121,7 +122,12 @@ class TestContextPreview(ContextFixture):
             "timestamp": self.now.isoformat(),
             "source_file": source.name,
             "source_type": "user_context",
-            "metadata": {"sender": record.subject},
+            "metadata": {
+                "sender": record.subject,
+                "subject": record.subject,
+                "record_kind": record.kind,
+                "authority": record.authority,
+            },
         }
         self.dataset.joinpath("sources", "context.jsonl").write_text(
             json.dumps(message) + "\n", encoding="utf-8"
@@ -138,6 +144,74 @@ class TestContextPreview(ContextFixture):
         after = {path.relative_to(self.dataset): path.read_bytes() for path in self.dataset.rglob("*") if path.is_file()}
         self.assertEqual(result, 0)
         self.assertEqual(after, before)
+
+    def test_apply_persists_provenance_and_is_idempotent(self):
+        source = self.source("ASSERT: Alex cumple años en marzo.")
+        preview = build_context_preview(source, self.dataset, now=self.now)
+        healthy = {"ok": True, "errors": [], "warnings": []}
+        with (
+            patch("lazograph.features.add_context.service._vector_ids", return_value=set()),
+            patch("scripts.ingest._store_in_mempalace", return_value=1) as store,
+            patch("scripts.dataset_invariants.validate_dataset", return_value=healthy),
+        ):
+            result = apply_context(preview)
+
+        self.assertEqual(result.stored_records, 1)
+        self.assertEqual(result.vector_count, 1)
+        backup = self.dataset / "sources" / result.source_file
+        persisted = json.loads(backup.read_text(encoding="utf-8").strip())
+        self.assertEqual(persisted["source_type"], "user_context")
+        self.assertEqual(persisted["metadata"]["authority"], "user_assertion")
+        self.assertEqual(persisted["metadata"]["confidence"], 1.0)
+        index = json.loads(
+            self.dataset.joinpath("sources", ".source-index.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(index["files"][0]["source_sha256"], preview.source_sha256)
+        self.assertEqual(index["files"][0]["authored_by"], "dataset_owner")
+        store.assert_called_once()
+
+        second = build_context_preview(source, self.dataset, now=self.now)
+        with (
+            patch("scripts.ingest._store_in_mempalace") as second_store,
+            patch("scripts.dataset_invariants.validate_dataset", return_value=healthy),
+        ):
+            repeated = apply_context(second)
+        self.assertEqual(repeated.stored_records, 0)
+        self.assertEqual(repeated.duplicates, 1)
+        second_store.assert_not_called()
+
+    def test_apply_rejects_source_changed_after_preview(self):
+        source = self.source("ASSERT: Alex cumple años en marzo.")
+        preview = build_context_preview(source, self.dataset, now=self.now)
+        source.write_text("ASSERT: Alex cumple años en abril.", encoding="utf-8")
+        with self.assertRaisesRegex(ContextValidationError, "changed after preflight"):
+            apply_context(preview)
+
+    def test_failed_apply_restores_files_and_new_vectors(self):
+        source = self.source("ASSERT: Alex cumple años en marzo.")
+        preview = build_context_preview(source, self.dataset, now=self.now)
+        before = {
+            path.relative_to(self.dataset): path.read_bytes()
+            for path in self.dataset.rglob("*") if path.is_file()
+        }
+        unhealthy = {"ok": False, "errors": [{"check": "vectors.count"}], "warnings": []}
+        with (
+            patch(
+                "lazograph.features.add_context.service._vector_ids",
+                side_effect=[set(), {"sample-new"}],
+            ),
+            patch("lazograph.features.add_context.service._delete_vectors") as delete,
+            patch("scripts.ingest._store_in_mempalace", return_value=1),
+            patch("scripts.dataset_invariants.validate_dataset", return_value=unhealthy),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "rolled back"):
+                apply_context(preview)
+        after = {
+            path.relative_to(self.dataset): path.read_bytes()
+            for path in self.dataset.rglob("*") if path.is_file()
+        }
+        self.assertEqual(after, before)
+        delete.assert_called_once_with(self.dataset, {"sample-new"})
 
 
 class TestContextCLI(unittest.TestCase):

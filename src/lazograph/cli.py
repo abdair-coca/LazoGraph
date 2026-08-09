@@ -8,7 +8,11 @@ import sys
 from lazograph.config import ConfigurationError, knowledge_root, resolve_dataset
 from lazograph.domain.identity import IdentityResolutionError
 from lazograph.features.ask_person.service import GroundingError, answer_about_person
-from lazograph.features.add_context import ContextValidationError, build_context_preview
+from lazograph.features.add_context import (
+    ContextValidationError,
+    apply_context,
+    build_context_preview,
+)
 from lazograph.infrastructure.llm import (
     HostedProvider,
     LocalExtractiveProvider,
@@ -253,6 +257,11 @@ def _print_answer(answer, *, debug: bool) -> None:
                 f"  [{evidence.message_id}] {evidence.sender}, {timestamp}, "
                 f"score={evidence.score:.4f}"
             )
+            if evidence.source_type == "user_context":
+                print(
+                    f"    provenance: {evidence.record_kind}; authority={evidence.authority}; "
+                    f"authored_by={evidence.authored_by}"
+                )
             print(f"    {evidence.excerpt}")
     else:
         print("Citations: none")
@@ -331,8 +340,21 @@ def _run_context(args: argparse.Namespace) -> int:
     if args.dry_run:
         print("Dry run complete. No files written.")
         return 0
-    print("Context apply is not available in this implementation increment.", file=sys.stderr)
-    return 2
+    try:
+        result = apply_context(preview)
+    except (ContextValidationError, RuntimeError, OSError) as exc:
+        print(f"Context apply failed: {exc}", file=sys.stderr)
+        return 2
+    if not result.stored_records:
+        print("Already stored. Dataset unchanged.")
+        return 0
+    print("Context applied.")
+    print(f"  Stored records: {result.stored_records}")
+    print(f"  Duplicate records skipped: {result.duplicates}")
+    print(f"  Vectors stored: {result.vector_count}")
+    print(f"  Source backup: sources/{result.source_file}")
+    print("  Dataset invariants: passed")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

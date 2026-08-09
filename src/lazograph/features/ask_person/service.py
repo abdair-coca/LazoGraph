@@ -185,6 +185,15 @@ def retrieve_evidence(
                 timestamp=message.get("timestamp"),
                 excerpt=excerpt,
                 score=round(score, 4),
+                source_type=str(message.get("source_type", "")),
+                record_kind=str(message.get("metadata", {}).get("record_kind", "")),
+                authority=str(message.get("metadata", {}).get("authority", "")),
+                authored_by=str(message.get("metadata", {}).get("authored_by", "")),
+                confidence=(
+                    float(message.get("metadata", {}).get("confidence"))
+                    if isinstance(message.get("metadata", {}).get("confidence"), (int, float))
+                    else None
+                ),
             ),
         ))
 

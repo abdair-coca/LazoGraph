@@ -63,6 +63,11 @@ def _prompt(
             "sender": item.sender,
             "timestamp": item.timestamp,
             "excerpt": item.excerpt,
+            "source_type": item.source_type,
+            "record_kind": item.record_kind,
+            "authority": item.authority,
+            "authored_by": item.authored_by,
+            "evidence_confidence": item.confidence,
         }
         for item in evidence
     ]
@@ -127,10 +132,17 @@ class LocalExtractiveProvider:
             return ProviderOutput(text, (), 0.0, abstained=True)
 
         selected = tuple(evidence[:3])
+        has_manual_context = any(item.source_type == "user_context" for item in selected)
         if language == "es":
-            lead = f"Según mensajes de {participant}:"
+            lead = (
+                f"Según la evidencia guardada sobre {participant}:"
+                if has_manual_context else f"Según mensajes de {participant}:"
+            )
         else:
-            lead = f"According to {participant}'s messages:"
+            lead = (
+                f"According to stored evidence about {participant}:"
+                if has_manual_context else f"According to {participant}'s messages:"
+            )
         lines = [lead]
         for item in selected:
             lines.append(f'- “{item.excerpt}” [{item.message_id}]')

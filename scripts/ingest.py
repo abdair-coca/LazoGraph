@@ -355,6 +355,15 @@ def scan_pii(messages: list[dict]) -> set[str]:
 
 def _content_hash(msg: dict) -> str:
     key = f'{msg["role"]}:{msg["content"]}'
+    if msg.get('source_type') == 'user_context':
+        metadata = msg.get('metadata', {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        key += ':' + ':'.join((
+            str(metadata.get('subject', '')).casefold().strip(),
+            str(metadata.get('record_kind', '')).casefold().strip(),
+            str(metadata.get('authority', '')).casefold().strip(),
+        ))
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
@@ -554,7 +563,8 @@ def _run_equivalent_source_reconciliation(
 # --- Sources backup ---
 
 def _write_sources_backup(dataset_dir: Path, messages: list[dict], adapter_name: str,
-                          source_path: str | None, pii_flags: set[str]) -> str:
+                          source_path: str | None, pii_flags: set[str], *,
+                          source_metadata: dict | None = None) -> str:
     sources_dir = dataset_dir / 'sources'
     sources_dir.mkdir(exist_ok=True)
 
@@ -586,7 +596,7 @@ def _write_sources_backup(dataset_dir: Path, messages: list[dict], adapter_name:
     else:
         index = {'files': [], 'last_updated': ''}
 
-    index['files'].append({
+    source_entry = {
         'filename': filename,
         'adapter': adapter_name,
         'source': source_path or adapter_name,
@@ -597,7 +607,10 @@ def _write_sources_backup(dataset_dir: Path, messages: list[dict], adapter_name:
             ''.join(m['content'] for m in messages).encode()
         ).hexdigest()[:16],
         'pii_flags': sorted(pii_flags) if pii_flags else None,
-    })
+    }
+    if source_metadata:
+        source_entry.update(source_metadata)
+    index['files'].append(source_entry)
     index['last_updated'] = datetime.now(timezone.utc).isoformat()
 
     index_path.write_text(json.dumps(index, indent=2, ensure_ascii=False) + '\n')
@@ -730,6 +743,18 @@ def _vector_metadata(slug: str, message: dict) -> dict:
     }
     if message.get('timestamp'):
         metadata['authored_at'] = message['timestamp']
+    for key in (
+        'subject',
+        'authored_by',
+        'record_kind',
+        'authority',
+        'confidence',
+        'source_sha256',
+        'record_number',
+    ):
+        value = message_metadata.get(key)
+        if isinstance(value, (str, int, float, bool)) and value != '':
+            metadata[key] = value
     return metadata
 
 

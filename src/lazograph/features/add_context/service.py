@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +35,7 @@ class ContextPreview:
     source: Path
     dataset_dir: Path
     source_sha256: str
+    imported_at: str
     records: tuple[ContextRecord, ...]
     pii_flags: tuple[str, ...]
 
@@ -43,6 +46,15 @@ class ContextPreview:
     @property
     def new_records(self) -> int:
         return len(self.records) - self.duplicates
+
+
+@dataclass(frozen=True)
+class ContextApplyResult:
+    source_file: str | None
+    stored_records: int
+    duplicates: int
+    vector_count: int
+    invariants: dict
 
 
 _PREFIXES = {
@@ -227,6 +239,160 @@ def build_context_preview(
         source=source.resolve(),
         dataset_dir=dataset_dir,
         source_sha256=source_sha256,
+        imported_at=imported_at,
         records=tuple(records),
         pii_flags=tuple(sorted(ingest.scan_pii(messages))),
     )
+
+
+def _preview_messages(preview: ContextPreview) -> list[dict]:
+    return [
+        _message(
+            record,
+            source=preview.source,
+            source_sha256=preview.source_sha256,
+            imported_at=preview.imported_at,
+        )
+        for record in preview.records
+    ]
+
+
+def _snapshot(paths: list[Path]) -> dict[Path, bytes | None]:
+    return {path: path.read_bytes() if path.exists() else None for path in paths}
+
+
+def _restore(snapshot: dict[Path, bytes | None]) -> None:
+    for path, content in snapshot.items():
+        if content is None:
+            path.unlink(missing_ok=True)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+
+
+def _vector_ids(dataset_dir: Path) -> set[str]:
+    try:
+        from mempalace.palace import get_collection
+    except ImportError as exc:
+        raise RuntimeError(
+            "mempalace is required for context apply; install it with: pip install mempalace"
+        ) from exc
+    collection = get_collection(
+        str(dataset_dir / ".mempalace" / "palace"),
+        create=True,
+    )
+    result = collection.get(where={"wing": dataset_dir.name}, include=[])
+    return set(result.get("ids", []))
+
+
+def _delete_vectors(dataset_dir: Path, vector_ids: set[str]) -> None:
+    if not vector_ids:
+        return
+    from mempalace.palace import get_collection
+
+    collection = get_collection(
+        str(dataset_dir / ".mempalace" / "palace"),
+        create=True,
+    )
+    collection.delete(ids=sorted(vector_ids))
+
+
+def _kg_stats(dataset_dir: Path) -> dict[str, int]:
+    try:
+        payload = json.loads(dataset_dir.joinpath("dataset.json").read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        payload = {}
+    stats = payload.get("stats", {}) if isinstance(payload, dict) else {}
+    return {
+        "entities": int(stats.get("kg_entities", 0) or 0),
+        "relationships": int(stats.get("kg_relationships", 0) or 0),
+    }
+
+
+def apply_context(preview: ContextPreview) -> ContextApplyResult:
+    """Persist a validated preview and roll back all new artifacts on failure."""
+    try:
+        current_hash = "sha256:" + hashlib.sha256(preview.source.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise ContextValidationError("Context source changed or became unreadable.") from exc
+    if current_hash != preview.source_sha256:
+        raise ContextValidationError("Context source changed after preflight; run it again.")
+
+    existing_hashes = ingest._load_existing_hashes(preview.dataset_dir)
+    messages, duplicates = ingest.dedup_messages(_preview_messages(preview), existing_hashes)
+    if not messages:
+        from scripts.dataset_invariants import validate_dataset
+
+        invariants = validate_dataset(preview.dataset_dir)
+        if not invariants["ok"]:
+            raise RuntimeError("Existing dataset invariants failed; run diagnose before applying context.")
+        return ContextApplyResult(None, 0, duplicates, 0, invariants)
+
+    sources_dir = preview.dataset_dir / "sources"
+    managed_paths = [
+        preview.dataset_dir / "dataset.json",
+        preview.dataset_dir / "participants.json",
+        sources_dir / ".source-index.json",
+    ]
+    snapshot = _snapshot(managed_paths)
+    sources_before = set(sources_dir.glob("*.jsonl"))
+    vector_ids_before = _vector_ids(preview.dataset_dir)
+    source_filename = None
+    stored = 0
+    try:
+        stored = ingest._store_in_mempalace(
+            preview.dataset_dir,
+            preview.dataset_dir.name,
+            messages,
+        )
+        kinds = Counter(message["metadata"]["record_kind"] for message in messages)
+        source_filename = ingest._write_sources_backup(
+            preview.dataset_dir,
+            messages,
+            "user_context",
+            str(preview.source),
+            set(preview.pii_flags),
+            source_metadata={
+                "source_sha256": preview.source_sha256,
+                "authored_by": "dataset_owner",
+                "authority": "mixed" if len(kinds) > 1 else messages[0]["metadata"]["authority"],
+                "record_kinds": dict(sorted(kinds.items())),
+            },
+        )
+        all_messages = ingest._load_stored_messages(preview.dataset_dir)
+        ingest._write_participant_profiles(preview.dataset_dir, all_messages)
+        ingest._replace_stats(preview.dataset_dir, all_messages, _kg_stats(preview.dataset_dir))
+
+        from scripts.dataset_invariants import validate_dataset
+
+        invariants = validate_dataset(preview.dataset_dir)
+        if not invariants["ok"]:
+            raise RuntimeError("Dataset invariants failed after context apply.")
+        return ContextApplyResult(
+            source_file=source_filename,
+            stored_records=len(messages),
+            duplicates=duplicates,
+            vector_count=stored,
+            invariants=invariants,
+        )
+    except Exception as exc:
+        rollback_errors = []
+        for source_path in set(sources_dir.glob("*.jsonl")) - sources_before:
+            try:
+                source_path.unlink()
+            except OSError as rollback_exc:
+                rollback_errors.append(str(rollback_exc))
+        try:
+            _restore(snapshot)
+        except OSError as rollback_exc:
+            rollback_errors.append(str(rollback_exc))
+        try:
+            vector_ids_after = _vector_ids(preview.dataset_dir)
+            _delete_vectors(preview.dataset_dir, vector_ids_after - vector_ids_before)
+        except Exception as rollback_exc:
+            rollback_errors.append(str(rollback_exc))
+        if rollback_errors:
+            raise RuntimeError(
+                f"Context apply failed ({exc}); rollback also failed: {'; '.join(rollback_errors)}"
+            ) from exc
+        raise RuntimeError(f"Context apply failed and was rolled back: {exc}") from exc
