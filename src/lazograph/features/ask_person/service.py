@@ -194,6 +194,7 @@ def retrieve_evidence(
                     if isinstance(message.get("metadata", {}).get("confidence"), (int, float))
                     else None
                 ),
+                imported_at=str(message.get("metadata", {}).get("imported_at", "")),
             ),
         ))
 

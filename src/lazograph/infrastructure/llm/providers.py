@@ -68,6 +68,7 @@ def _prompt(
             "authority": item.authority,
             "authored_by": item.authored_by,
             "evidence_confidence": item.confidence,
+            "imported_at": item.imported_at,
         }
         for item in evidence
     ]

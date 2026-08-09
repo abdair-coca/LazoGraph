@@ -6,7 +6,10 @@ import os
 import sys
 import tempfile
 import unittest
+import gc
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +19,10 @@ sys.path.insert(0, str(ROOT / "src"))
 from lazograph.cli import build_parser, main
 from lazograph.features.add_context import ContextValidationError, build_context_preview
 from lazograph.features.add_context import apply_context
+from lazograph.features.ask_person.service import answer_about_person
+from lazograph.domain.answer import Evidence
+from lazograph.infrastructure.llm import HostedProvider, LocalExtractiveProvider
+from scripts.dataset_invariants import validate_dataset
 
 
 class ContextFixture(unittest.TestCase):
@@ -223,6 +230,132 @@ class TestContextCLI(unittest.TestCase):
             parser.parse_args([
                 "context", "context.txt", "--slug", "sample", "--dry-run", "--apply"
             ])
+
+
+class TestContextProviderBoundary(unittest.TestCase):
+    def test_hosted_provider_gets_selected_provenance_not_source_path_or_hash(self):
+        captured = {}
+        evidence = Evidence(
+            message_id="context.jsonl:1",
+            sender="Alex",
+            source_file="context.jsonl",
+            timestamp=None,
+            excerpt="Alex cumple años en marzo.",
+            score=0.9,
+            source_type="user_context",
+            record_kind="assertion",
+            authority="user_assertion",
+            authored_by="dataset_owner",
+            confidence=1.0,
+            imported_at="2026-08-08T12:00:00+00:00",
+        )
+
+        def transport(_url, _headers, payload):
+            captured["payload"] = payload
+            return {"choices": [{"message": {"content": json.dumps({
+                "text": "Cumple años en marzo [context.jsonl:1]",
+                "citation_ids": ["context.jsonl:1"],
+                "confidence": 0.9,
+                "abstained": False,
+            })}}]}
+
+        provider = HostedProvider(
+            url="https://provider.invalid/chat",
+            model="test-model",
+            api_key="test-key",
+            transport=transport,
+        )
+        provider.generate("¿Cuándo cumple años?", "Alex", [evidence], {}, language="es")
+        serialized = json.dumps(captured["payload"], ensure_ascii=False)
+        self.assertIn("user_assertion", serialized)
+        self.assertIn("dataset_owner", serialized)
+        self.assertNotIn("sha256:", serialized)
+        self.assertNotIn("C:\\\\", serialized)
+
+
+class TestContextEndToEnd(unittest.TestCase):
+    def test_import_context_ask_and_repeat_apply(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            root = Path(tmp) / "knowledge"
+            context_source = Path(tmp) / "context.txt"
+            context_source.write_text(
+                "ASSERT: Alex cumple años el 14 de marzo.",
+                encoding="utf-8",
+            )
+            output = StringIO()
+            with (
+                patch.dict(os.environ, {"OPENPERSONA_KNOWLEDGE": str(root)}),
+                redirect_stdout(output),
+                redirect_stderr(output),
+            ):
+                imported = main([
+                    "import",
+                    str(ROOT / "tests" / "fixtures" / "sample-whatsapp-localized.txt"),
+                    "--slug",
+                    "sample",
+                    "--persona",
+                    "Samantha",
+                    "--yes",
+                ])
+                applied = main([
+                    "context",
+                    str(context_source),
+                    "--slug",
+                    "sample",
+                    "--apply",
+                ])
+
+            self.assertEqual(imported, 0, output.getvalue())
+            self.assertEqual(applied, 0, output.getvalue())
+            dataset = root / "sample"
+            invariants = validate_dataset(dataset)
+            self.assertTrue(invariants["ok"], invariants)
+
+            answer = answer_about_person(
+                dataset,
+                "¿Cuándo cumple años Alex?",
+                "Alex",
+                LocalExtractiveProvider(),
+                limit=3,
+            )
+            self.assertFalse(answer.abstained)
+            context_evidence = [
+                item for item in answer.citations if item.source_type == "user_context"
+            ]
+            self.assertTrue(context_evidence)
+            self.assertEqual(context_evidence[0].record_kind, "assertion")
+            self.assertEqual(context_evidence[0].authority, "user_assertion")
+            self.assertEqual(context_evidence[0].confidence, 1.0)
+            self.assertIn("evidencia guardada", answer.text)
+
+            before = {
+                path.relative_to(dataset): path.read_bytes()
+                for path in dataset.rglob("*") if path.is_file()
+            }
+            repeat_output = StringIO()
+            with (
+                patch.dict(os.environ, {"OPENPERSONA_KNOWLEDGE": str(root)}),
+                redirect_stdout(repeat_output),
+                redirect_stderr(repeat_output),
+            ):
+                repeated = main([
+                    "context",
+                    str(context_source),
+                    "--slug",
+                    "sample",
+                    "--apply",
+                ])
+            after = {
+                path.relative_to(dataset): path.read_bytes()
+                for path in dataset.rglob("*") if path.is_file()
+            }
+            self.assertEqual(repeated, 0, repeat_output.getvalue())
+            self.assertIn("Already stored", repeat_output.getvalue())
+            self.assertEqual(after, before)
+            from chromadb.api.client import SharedSystemClient
+
+            SharedSystemClient.clear_system_cache()
+            gc.collect()
 
 
 if __name__ == "__main__":

@@ -155,7 +155,7 @@ def _message(
     return {
         "role": "user",
         "content": record.content,
-        "timestamp": imported_at,
+        "timestamp": None,
         "source_file": source.name,
         "source_type": "user_context",
         "metadata": {
@@ -167,6 +167,7 @@ def _message(
             "confidence": record.confidence,
             "source_sha256": source_sha256,
             "record_number": record.number,
+            "imported_at": imported_at,
         },
     }
 

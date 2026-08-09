@@ -19,6 +19,7 @@ class Evidence:
     authority: str = ""
     authored_by: str = ""
     confidence: float | None = None
+    imported_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

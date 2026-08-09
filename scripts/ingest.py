@@ -751,6 +751,7 @@ def _vector_metadata(slug: str, message: dict) -> dict:
         'confidence',
         'source_sha256',
         'record_number',
+        'imported_at',
     ):
         value = message_metadata.get(key)
         if isinstance(value, (str, int, float, bool)) and value != '':
