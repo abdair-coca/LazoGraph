@@ -1,7 +1,7 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1–3 are accepted. Commands in Slices 4–8 remain planned and
-> are not implemented. Existing
+> **Gated delivery document.** Slices 1–3 are accepted. Slice 4 is in progress. Commands in
+> Slices 5–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -91,7 +91,7 @@ This table is the single source of truth for roadmap progress.
 | 1 | Import Chat | Accepted | Available | Accepted |
 | 2 | Ask About a Person | Accepted | Available | Accepted |
 | 3 | Add Manual Context | Accepted | Available | Accepted |
-| 4 | Correct Knowledge | Planned | Unlocked; not started | Pending |
+| 4 | Correct Knowledge | In Progress | Under development | Pending |
 | 5 | Ask About Relationships | Planned | Locked by Slice 4 | Pending |
 | 6 | Pending Plans | Planned | Locked by Slice 5 | Pending |
 | 7 | Grounded Suggestions | Planned | Locked by Slice 6 | Pending |
@@ -488,7 +488,7 @@ lazo ask "¿Cuándo cumple años Alex?" --about Alex
 
 ## Slice 4 — Correct Knowledge
 
-**Status:** Planned  
+**Status:** In Progress
 **Dependency:** Slice 3 accepted  
 **Unlocks:** Slice 5
 
@@ -496,7 +496,7 @@ lazo ask "¿Cuándo cumple años Alex?" --about Alex
 
 Correct extracted knowledge safely, reversibly, and without losing the correction during rebuilds.
 
-### Planned interfaces — not implemented
+### Target interfaces — implementation in progress
 
 ```bash
 lazo correct "Carlos is Juan's cousin, not his brother" --dry-run
