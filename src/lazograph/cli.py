@@ -5,6 +5,15 @@ from __future__ import annotations
 import argparse
 import sys
 
+from lazograph.config import ConfigurationError, knowledge_root, resolve_dataset
+from lazograph.domain.identity import IdentityResolutionError
+from lazograph.features.ask_person.service import GroundingError, answer_about_person
+from lazograph.infrastructure.llm import (
+    HostedProvider,
+    LocalExtractiveProvider,
+    OllamaProvider,
+    ProviderError,
+)
 from scripts import dataset_invariants, ingest, init_knowledge
 from scripts.runtime import configure_safe_output
 
@@ -12,13 +21,12 @@ from .features.import_chat.service import (
     ImportPreview,
     ImportValidationError,
     build_preview,
-    knowledge_root,
 )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lazo", description="LazoGraph personal knowledge CLI")
-    parser.add_argument("--version", action="version", version="LazoGraph 0.4.0")
+    parser.add_argument("--version", action="version", version="LazoGraph 0.5.0")
     commands = parser.add_subparsers(dest="command", required=True)
 
     import_parser = commands.add_parser(
@@ -56,6 +64,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="Replace equivalent backups using recoverable quarantine",
     )
     import_parser.set_defaults(handler=_run_import)
+
+    ask_parser = commands.add_parser(
+        "ask",
+        help="Answer a grounded question about one participant",
+    )
+    ask_parser.add_argument("question", help="Question to answer")
+    ask_parser.add_argument("--about", required=True, help="Canonical participant or alias")
+    ask_parser.add_argument("--slug", help="Dataset identifier; optional when only one exists")
+    ask_parser.add_argument(
+        "--provider",
+        choices=("local", "ollama", "hosted"),
+        default="local",
+        help="Inference provider (default: local extractive)",
+    )
+    ask_parser.add_argument("--model", help="Model override for Ollama or hosted provider")
+    ask_parser.add_argument("--limit", type=int, default=5, help="Maximum evidence items")
+    ask_parser.add_argument(
+        "--evidence-budget",
+        type=int,
+        default=2500,
+        help="Maximum evidence characters sent to provider",
+    )
+    ask_parser.add_argument("--json", action="store_true", help="Output structured Answer JSON")
+    ask_parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print retrieval counts without unrelated private content",
+    )
+    ask_parser.set_defaults(handler=_run_ask)
     return parser
 
 
@@ -173,9 +210,73 @@ def _run_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def _answer_provider(args: argparse.Namespace):
+    if args.provider == "ollama":
+        return OllamaProvider(model=args.model)
+    if args.provider == "hosted":
+        return HostedProvider(model=args.model)
+    return LocalExtractiveProvider()
+
+
+def _print_answer(answer, *, debug: bool) -> None:
+    print(answer.text)
+    print(f"Confidence: {answer.confidence:.2f}")
+    if answer.citations:
+        print("Citations:")
+        for evidence in answer.citations:
+            timestamp = evidence.timestamp or "unknown time"
+            print(
+                f"  [{evidence.message_id}] {evidence.sender}, {timestamp}, "
+                f"score={evidence.score:.4f}"
+            )
+            print(f"    {evidence.excerpt}")
+    else:
+        print("Citations: none")
+    if debug:
+        print("Retrieval:")
+        for key, value in answer.retrieval_summary.items():
+            print(f"  {key}: {value}")
+
+
+def _run_ask(args: argparse.Namespace) -> int:
+    if args.limit < 1:
+        print("Ask rejected: --limit must be at least 1.", file=sys.stderr)
+        return 2
+    if args.evidence_budget < 100:
+        print("Ask rejected: --evidence-budget must be at least 100.", file=sys.stderr)
+        return 2
+    try:
+        dataset_dir = resolve_dataset(args.slug)
+        answer = answer_about_person(
+            dataset_dir,
+            args.question,
+            args.about,
+            _answer_provider(args),
+            limit=args.limit,
+            evidence_budget=args.evidence_budget,
+        )
+    except (
+        ConfigurationError,
+        IdentityResolutionError,
+        GroundingError,
+        ProviderError,
+        RuntimeError,
+        OSError,
+    ) as exc:
+        print(f"Ask failed: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json:
+        import json
+
+        print(json.dumps(answer.to_dict(), indent=2, ensure_ascii=False))
+    else:
+        _print_answer(answer, debug=args.debug)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     configure_safe_output()
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.handler(args))
-

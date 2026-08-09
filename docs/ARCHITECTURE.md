@@ -9,7 +9,8 @@ LazoGraph converts private life records into four usable representations while p
 3. Entity/relationship graph.
 4. Evidence-backed wiki and training export.
 
-The system is deterministic where possible. LLM synthesis is not part of the current runtime.
+The system is deterministic where possible. Grounded person answers use a provider-neutral
+boundary; offline extractive synthesis is the default.
 
 ## Data flow
 
@@ -38,6 +39,10 @@ source
 one focal participant, shows trust-relevant counts, and stops on ambiguity or equivalent backups.
 After confirmation it delegates initialization and persistence to existing script modules, then
 runs dataset invariants. Legacy `scripts/*.py` commands remain supported wrappers.
+
+`lazo ask` owns Slice 2 orchestration. It resolves one canonical profile, applies its sender filter
+inside vector retrieval, rejects mismatched or unpersisted hits, ranks a bounded evidence set,
+adds safe KG/wiki metadata, calls an `LLMProvider`, then validates every returned citation.
 
 ### Adapters
 
@@ -84,6 +89,19 @@ Generated relationship confidence:
 - `0.84`: bounded pronoun coreference.
 
 Person extraction combines known participants, contextual cues, conservative multiword NER, stop-token rejection, and a minimum confidence threshold. Coreference expires after two messages from the same persona sender.
+
+### Grounded person answers
+
+Stable contracts live under `src/lazograph/domain/`:
+
+- `Evidence`: persisted message ID, sender, source, timestamp, excerpt, score.
+- `Answer`: text, validated Evidence citations, confidence, entities, retrieval summary.
+- `LLMProvider`: provider-neutral generation from selected evidence and whitelisted metadata.
+
+Default `local` mode quotes only verified evidence and never uses network access. `ollama` stays on
+the configured local endpoint. `hosted` requires explicit URL, model, and API key; prompt assembly
+whitelists minimal profile metadata and sends only the selected evidence budget. Missing, weak,
+contradictory, cross-participant, or uncitable evidence produces abstention or a hard error.
 
 ### Wiki
 

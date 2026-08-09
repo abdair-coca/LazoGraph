@@ -20,8 +20,11 @@ LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/
 - Run a disposable end-to-end test on Windows, macOS, or Linux.
 - Preview and import a chat through the packaged `lazo import` command with explicit participant
   selection and invariant validation.
+- Ask grounded questions about one participant through `lazo ask`, with persisted citations,
+  canonical alias isolation, confidence, and safe abstention.
 
-Current boundary: LazoGraph retrieves evidence through `query_memory.py` and `query_kg.py`; it does not yet synthesize natural-language answers. Conversational RAG is the next roadmap item.
+Current boundary: person-specific grounded answers are demo-ready. Relationship-wide synthesis,
+manual context, corrections, plans, and suggestions remain gated roadmap work.
 
 ## Architecture
 
@@ -126,6 +129,8 @@ Atomic rebuild runs vectors, graph, wiki, wiki lint, and functional smoke tests.
 ### 4. Search memories and graph
 
 ```powershell
+lazo ask "¿Qué cosas le gustan a Samantha?" --about Samantha --slug sam
+
 python scripts/query_memory.py `
   --slug sam `
   --query "work and projects" `
@@ -136,6 +141,11 @@ python scripts/query_kg.py --slug sam --entity "Alex"
 python scripts/query_kg.py --slug sam --path "Sam" "Alex"
 python scripts/query_kg.py --slug sam --stats
 ```
+
+`lazo ask` uses the offline extractive provider by default. It sends no data over the network.
+Optional local generation uses `--provider ollama`. Hosted generation requires explicit
+`--provider hosted` plus `LAZOGRAPH_HOSTED_URL`, `LAZOGRAPH_HOSTED_MODEL`, and
+`LAZOGRAPH_HOSTED_API_KEY`; only selected evidence crosses that boundary.
 
 `query_memory.py` returns ranked evidence, not a generated answer. Participant aliases resolve to canonical names before ChromaDB filtering.
 
@@ -243,6 +253,7 @@ See [Source formats](references/source-formats.md) for details.
 | Script | Purpose |
 |---|---|
 | `lazo import` | Preview participants, safely initialize, import, and validate one chat |
+| `lazo ask` | Answer about one participant with isolated retrieval and validated citations |
 | `init_knowledge.py` | Initialize dataset or print basic stats |
 | `ingest.py` | Parse, deduplicate, store, reconcile, migrate, and rebuild |
 | `query_memory.py` | Participant-filtered semantic retrieval |

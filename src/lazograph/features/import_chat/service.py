@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import unicodedata
 from collections import Counter
@@ -12,6 +11,7 @@ from pathlib import Path
 
 from adapters import detect_adapter
 from scripts import ingest
+from lazograph.config import knowledge_root
 
 
 class ImportValidationError(ValueError):
@@ -42,15 +42,6 @@ class ImportPreview:
     dataset_dir: Path
     dataset_exists: bool
     same_source_reimport: bool
-
-
-def knowledge_root() -> Path:
-    return Path(
-        os.environ.get(
-            "OPENPERSONA_KNOWLEDGE",
-            Path.home() / ".openpersona" / "knowledge",
-        )
-    )
 
 
 def _name_key(value: str) -> str:
@@ -208,4 +199,3 @@ def build_preview(
             not new_messages and _source_was_imported(dataset_dir, source)
         ),
     )
-

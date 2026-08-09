@@ -38,6 +38,39 @@ python scripts/smoke_test.py --slug sam
 The second import must report zero new messages and leave the dataset unchanged. Existing
 `init_knowledge.py` and `ingest.py` workflows remain supported for advanced or legacy operation.
 
+## Ask about one participant
+
+Default offline provider:
+
+```powershell
+lazo ask "¿Qué cosas le gustan a Samantha?" `
+  --about Samantha `
+  --slug sam
+```
+
+Use `--debug` for counts, filters, provider mode, and evidence budget without printing unrelated
+participant content. Use `--json` for the complete `Answer` contract.
+
+Optional local Ollama:
+
+```powershell
+$env:LAZOGRAPH_OLLAMA_MODEL='llama3.2'
+lazo ask "¿Qué cosas le gustan a Samantha?" --about Samantha --slug sam --provider ollama
+```
+
+Explicit hosted boundary:
+
+```powershell
+$env:LAZOGRAPH_HOSTED_URL='https://provider.example/v1/chat/completions'
+$env:LAZOGRAPH_HOSTED_MODEL='configured-model'
+$env:LAZOGRAPH_HOSTED_API_KEY='secret'
+lazo ask "¿Qué cosas le gustan a Samantha?" --about Samantha --slug sam --provider hosted
+```
+
+Hosted mode sends the question, canonical participant name, selected evidence, and whitelisted
+profile metadata. It never sends the full dataset. Provider errors and invalid citations exit
+non-zero without changing knowledge.
+
 ## Adding another source
 
 Run `lazo import ... --dry-run` first. If equivalent-source preflight stops ingestion, do not use

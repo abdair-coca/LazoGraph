@@ -9,12 +9,18 @@
   duplicates, rejected system notices, and equivalent-source warnings.
 - Automatic dataset initialization after confirmation plus final invariant validation.
 - Localized generic import fixture and Slice 1 CLI/integration regression coverage.
+- Slice 2 `lazo ask` with participant-filtered retrieval, persisted Evidence citations, Answer
+  contracts, confidence, safe debug summaries, and Spanish responses.
+- Provider-neutral `LLMProvider` implementations: offline extractive default, local Ollama, and an
+  explicitly configured evidence-only hosted boundary.
+- Abstention for missing, weak, contradictory, or topic-mismatched evidence.
 
 ### Changed
 
 - Existing adapters and ingestion remain the implementation boundary; `scripts/*.py` commands stay
   compatible.
 - Reimporting the same source exits successfully without changing persisted data.
+- Semantic hits must pass canonical sender and persisted-source validation before generation.
 
 ### Fixed
 

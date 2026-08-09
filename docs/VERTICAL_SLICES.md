@@ -1,7 +1,8 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slice 1's `lazo import` command is accepted. Slice 2 is in progress.
-> Commands in Slices 3–8 remain planned and are not implemented. Existing
+> **Gated delivery document.** Slice 1's `lazo import` command is accepted. Slice 2's `lazo ask`
+> command is implemented and awaiting feedback. Commands in Slices 3–8 remain planned and are not
+> implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -91,7 +92,7 @@ This table is the single source of truth for roadmap progress.
 | Slice | Capability | Status | Availability | Acceptance |
 |---:|---|---|---|---|
 | 1 | Import Chat | Accepted | Available | Accepted |
-| 2 | Ask About a Person | In Progress | Active | Pending |
+| 2 | Ask About a Person | Awaiting Feedback | Demo ready | Pending |
 | 3 | Add Manual Context | Planned | Locked by Slice 2 | Pending |
 | 4 | Correct Knowledge | Planned | Locked by Slice 3 | Pending |
 | 5 | Ask About Relationships | Planned | Locked by Slice 4 | Pending |
@@ -305,7 +306,7 @@ python scripts/diagnose.py --slug sample
 
 ## Slice 2 — Ask About a Person
 
-**Status:** In Progress  
+**Status:** Awaiting Feedback
 **Dependency:** Slice 1 accepted  
 **Unlocks:** Slice 3
 
@@ -313,7 +314,7 @@ python scripts/diagnose.py --slug sample
 
 Answer grounded questions about one known participant with verifiable citations.
 
-### Planned interface — not implemented
+### Implemented interface — awaiting feedback
 
 ```bash
 lazo ask "What does Alex like?" --about Alex

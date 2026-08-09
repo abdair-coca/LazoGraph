@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Python 3.11+ and mempalace >= 3.1.0. Windows, macOS, and Linux."
 allowed-tools: Read Write Bash
 metadata:
-  version: "0.4.0"
+  version: "0.5.0"
   project: LazoGraph
   upstream: acnlabs/persona-knowledge
   requires: "python >= 3.11, mempalace >= 3.1.0"
@@ -89,6 +89,17 @@ Pipeline:
 9. Build participant profiles and aliases.
 10. Extract graph entities/relationships with numeric confidence.
 11. Validate dataset-wide invariants.
+
+## Phase 2: ask about one participant
+
+```bash
+lazo ask "What does Alex like?" --about Alex --slug {slug}
+```
+
+Default `local` provider stays offline. Results contain persisted message citations and abstain when
+evidence is weak, contradictory, or unavailable. `--provider ollama` enables local generation.
+`--provider hosted` requires explicit endpoint/model/key configuration and sends only selected
+evidence. Never use an unfiltered retrieval result to answer about a named participant.
 
 If an equivalent source exists, stop by default. Use:
 

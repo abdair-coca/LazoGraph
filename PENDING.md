@@ -6,9 +6,9 @@
   focal-person resolution, confirmation, idempotent reimport, equivalent-source preflight,
   compatibility wrappers, and final invariant validation passed automated and real-data testing.
 
-- [ ] **Slice 2 — Ask About a Person: In Progress.** Build participant-isolated semantic retrieval,
-  provider-neutral answer synthesis, validated citations, confidence, Spanish answers, and safe
-  abstention. Slice 3 remains locked.
+- [ ] **Slice 2 — Ask About a Person: Awaiting Feedback.** Participant-isolated semantic retrieval,
+  provider-neutral synthesis, persisted citations, confidence, Spanish output, contradiction
+  handling, and safe abstention are demo-ready. Development is paused; Slice 3 remains locked.
 
 The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
 their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.
