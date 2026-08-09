@@ -11,7 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterator
 
-from lazograph.domain.correction import CorrectionPreview, SYMMETRIC_RELATIONS
+from lazograph.domain.correction import (
+    CorrectionPreview,
+    SYMMETRIC_RELATIONS,
+    semantic_claim_id,
+)
 
 
 class CorrectionLedgerError(RuntimeError):
@@ -140,6 +144,23 @@ def append_correction(
         existing = find_active_by_fingerprint(dataset_dir, preview.fingerprint)
         if existing:
             return {"appended": False, "record": existing}
+        retract_id = semantic_claim_id(
+            preview.retract.subject,
+            preview.retract.predicate,
+            preview.retract.object,
+        )
+        for active in active_corrections(dataset_dir):
+            active_retract = active["retract"]
+            active_retract_id = semantic_claim_id(
+                str(active_retract.get("subject", "")),
+                str(active_retract.get("predicate", "")),
+                str(active_retract.get("object", "")),
+            )
+            if active_retract_id == retract_id:
+                raise CorrectionLedgerError(
+                    "Another active correction already retracts this claim. "
+                    f'Undo {active["claim_id"]} before applying a different replacement.'
+                )
         if not preview.matched_claims:
             raise CorrectionLedgerError("Correction has no matched effective claim to retract.")
         claim_id = _new_id("claim", id_factory)
@@ -165,6 +186,7 @@ def append_correction(
             "retract": retract,
             "assert": assert_claim,
             "matched_claim_ids": [claim.claim_id for claim in preview.matched_claims],
+            "supersedes": [claim.claim_id for claim in preview.matched_claims],
         }
         _append_event(dataset_dir, event)
         return {"appended": True, "record": {**event, "status": "active", "undo_event_id": None}}
@@ -229,7 +251,18 @@ def project_effective_graph(
 ) -> tuple[set[str], list[dict], dict]:
     """Overlay active corrections without mutating the generated graph."""
     effective_entities = set(entities)
-    effective = [dict(relationship) for relationship in relationships]
+    effective = []
+    for relationship in relationships:
+        copied = dict(relationship)
+        copied.setdefault(
+            "claim_id",
+            semantic_claim_id(
+                str(copied.get("from", "")),
+                str(copied.get("type", "")),
+                str(copied.get("to", "")),
+            ),
+        )
+        effective.append(copied)
     applied = 0
     retracted = 0
     records = correction_records(dataset_dir)

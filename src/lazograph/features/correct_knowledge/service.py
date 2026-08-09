@@ -7,8 +7,13 @@ import re
 import unicodedata
 from pathlib import Path
 
-from lazograph.domain.correction import Claim, CorrectionPreview, SYMMETRIC_RELATIONS
-from scripts import query_kg
+from lazograph.domain.correction import (
+    Claim,
+    CorrectionPreview,
+    SYMMETRIC_RELATIONS,
+    semantic_claim_id,
+)
+from scripts import ingest, query_kg
 
 
 class CorrectionValidationError(ValueError):
@@ -60,6 +65,9 @@ _RELATIONS = {
     "manager": "manager_of",
     "jefe": "manager_of",
     "jefa": "manager_of",
+    "conversation partner": "communicates_with",
+    "chat contact": "communicates_with",
+    "contacto del chat": "communicates_with",
 }
 
 _ENGLISH = re.compile(
@@ -178,15 +186,12 @@ def _same_claim(
 def _claim_from_relationship(relationship: dict) -> Claim:
     raw_confidence = relationship.get("confidence", 0.0)
     confidence = float(raw_confidence) if isinstance(raw_confidence, (int, float)) else 0.0
-    claim_value = "|".join((
-        str(relationship.get("from", "")).casefold(),
-        str(relationship.get("type", "")).casefold(),
-        str(relationship.get("to", "")).casefold(),
-        str(relationship.get("source", "")),
-        str(relationship.get("timestamp", "")),
-    ))
     claim_id = str(relationship.get("claim_id", "")) or (
-        "base-" + hashlib.sha256(claim_value.encode("utf-8")).hexdigest()[:16]
+        semantic_claim_id(
+            str(relationship.get("from", "")),
+            str(relationship.get("type", "")),
+            str(relationship.get("to", "")),
+        )
     )
     return Claim(
         subject=str(relationship.get("from", "")),
@@ -217,6 +222,7 @@ def build_correction_preview(text: str, dataset_dir: Path) -> CorrectionPreview:
         _key(subject), old_relation, _key(object_name), new_relation,
     ))
     fingerprint = "sha256:" + hashlib.sha256(fingerprint_value.encode("utf-8")).hexdigest()
+    pii_flags = tuple(sorted(ingest.scan_pii([{"content": text}])))
     from .ledger import find_active_by_fingerprint
 
     active = find_active_by_fingerprint(dataset_dir, fingerprint)
@@ -230,6 +236,7 @@ def build_correction_preview(text: str, dataset_dir: Path) -> CorrectionPreview:
             assert_claim=Claim(subject, new_relation, object_name, 1.0, "user_correction"),
             matched_claims=(),
             already_applied=True,
+            pii_flags=pii_flags,
         )
     if not matched:
         raise CorrectionValidationError(
@@ -243,6 +250,7 @@ def build_correction_preview(text: str, dataset_dir: Path) -> CorrectionPreview:
         retract=Claim(subject, old_relation, object_name, 1.0, "user_correction"),
         assert_claim=Claim(subject, new_relation, object_name, 1.0, "user_correction"),
         matched_claims=matched,
+        pii_flags=pii_flags,
     )
 
 

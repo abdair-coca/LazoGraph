@@ -7,6 +7,9 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+import gc
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,9 +25,12 @@ from lazograph.features.correct_knowledge import (
     correction_records,
     undo_correction,
 )
+from lazograph.features.correct_knowledge.ledger import append_correction
 from lazograph.features.ask_person.service import answer_about_person
 from lazograph.infrastructure.llm import LocalExtractiveProvider
+from lazograph.domain.answer import ProviderOutput
 from scripts import query_kg
+from scripts import rebuild_all
 
 
 class CorrectionFixture(unittest.TestCase):
@@ -134,6 +140,22 @@ class TestCorrectionPreview(CorrectionFixture):
         }
         self.assertEqual(result, 0)
         self.assertEqual(after, before)
+
+    def test_pii_is_reported_before_apply(self):
+        connection = sqlite3.connect(
+            self.dataset / ".mempalace" / "palace" / "knowledge_graph.sqlite3"
+        )
+        connection.execute("UPDATE entities SET name = ? WHERE id = ?", ("carlos@example.com", "1"))
+        connection.commit()
+        connection.close()
+        payload = json.loads(self.dataset.joinpath("participants.json").read_text(encoding="utf-8"))
+        payload["participants"][0] = {"name": "carlos@example.com", "aliases": []}
+        self.dataset.joinpath("participants.json").write_text(json.dumps(payload), encoding="utf-8")
+        preview = build_correction_preview(
+            "carlos@example.com is Juan's cousin, not his brother",
+            self.dataset,
+        )
+        self.assertIn("email", preview.pii_flags)
 
 
 class TestCorrectionLedger(CorrectionFixture):
@@ -299,6 +321,118 @@ class TestCorrectionLedger(CorrectionFixture):
         corrected = next(item for item in relationships if item["type"] == "cousin_of")
         self.assertEqual(corrected["source"].split(":", 1)[0], "correction")
 
+    def test_superseding_correction_and_undo_restore_previous_user_claim(self):
+        first = self.apply()
+        second_preview = build_correction_preview(
+            "Carlos no es primo de Juan, es su amigo",
+            self.dataset,
+        )
+        self.assertEqual(
+            second_preview.matched_claims[0].claim_id,
+            first["record"]["assert"]["claim_id"],
+        )
+        second = apply_correction(second_preview)
+        self.assertEqual(
+            second["record"]["supersedes"],
+            [first["record"]["assert"]["claim_id"]],
+        )
+        _entities, relationships, _stats = query_kg._load_kg(self.dataset)
+        self.assertTrue(any(item["type"] == "friend_of" for item in relationships))
+        self.assertFalse(any(item["type"] == "cousin_of" for item in relationships))
+
+        undo_correction(self.dataset, second["record"]["claim_id"])
+        _entities, restored, _stats = query_kg._load_kg(self.dataset)
+        self.assertTrue(any(item["type"] == "cousin_of" for item in restored))
+        self.assertFalse(any(item["type"] == "friend_of" for item in restored))
+
+    def test_stale_concurrent_preview_cannot_replace_same_claim_twice(self):
+        first = build_correction_preview(
+            "Carlos no es hermano de Juan, es su primo", self.dataset
+        )
+        conflicting = build_correction_preview(
+            "Carlos no es hermano de Juan, es su amigo", self.dataset
+        )
+        append_correction(self.dataset, first)
+        with self.assertRaisesRegex(CorrectionLedgerError, "already retracts"):
+            append_correction(self.dataset, conflicting)
+        self.assertEqual(len(correction_records(self.dataset)), 1)
+
+    def test_base_claim_id_survives_source_and_timestamp_changes(self):
+        applied = self.apply()
+        original_base_id = applied["record"]["matched_claim_ids"][0]
+        undo_correction(self.dataset, applied["record"]["claim_id"])
+        db_path = self.dataset / ".mempalace" / "palace" / "knowledge_graph.sqlite3"
+        connection = sqlite3.connect(db_path)
+        connection.execute(
+            "UPDATE triples SET source_file = ?, valid_from = ?",
+            ("rebuilt.jsonl", "2030-01-01T00:00:00"),
+        )
+        connection.commit()
+        connection.close()
+        rebuilt_preview = build_correction_preview(
+            "Carlos no es hermano de Juan, es su primo", self.dataset
+        )
+        self.assertEqual(rebuilt_preview.matched_claims[0].claim_id, original_base_id)
+
+    def test_answer_provider_never_receives_unrelated_participant_correction(self):
+        connection = sqlite3.connect(
+            self.dataset / ".mempalace" / "palace" / "knowledge_graph.sqlite3"
+        )
+        connection.executemany(
+            "INSERT INTO entities VALUES (?, ?)",
+            [("3", "Alice"), ("4", "Bob")],
+        )
+        connection.execute(
+            "INSERT INTO triples VALUES (?, ?, ?, ?, ?, ?)",
+            ("3", "sibling_of", "4", 0.84, "other.jsonl", None),
+        )
+        connection.commit()
+        connection.close()
+        payload = json.loads(self.dataset.joinpath("participants.json").read_text(encoding="utf-8"))
+        payload["participants"].extend([
+            {"name": "Alice", "aliases": []},
+            {"name": "Bob", "aliases": []},
+        ])
+        self.dataset.joinpath("participants.json").write_text(json.dumps(payload), encoding="utf-8")
+        self.apply()
+        apply_correction(build_correction_preview(
+            "Alice is Bob's cousin, not her sister", self.dataset
+        ))
+
+        class CaptureProvider:
+            name = "capture"
+            hosted = True
+
+            def __init__(self):
+                self.evidence = []
+
+            def generate(self, question, participant, evidence, context, *, language):
+                del question, participant, context, language
+                self.evidence = list(evidence)
+                first = evidence[0]
+                return ProviderOutput(
+                    f"Grounded [{first.message_id}]",
+                    (first.message_id,),
+                    1.0,
+                )
+
+        provider = CaptureProvider()
+
+        def no_memories(_dataset, _query, *, participant, limit):
+            del participant, limit
+            return []
+
+        answer_about_person(
+            self.dataset,
+            "Is Carlos Juan's cousin or brother?",
+            "Carlos",
+            provider,
+            memory_search=no_memories,
+        )
+        self.assertEqual(len(provider.evidence), 1)
+        self.assertIn("Carlos", provider.evidence[0].excerpt)
+        self.assertNotIn("Alice", provider.evidence[0].excerpt)
+
 
 class TestCorrectionCLI(unittest.TestCase):
     def test_correct_requires_exactly_one_action(self):
@@ -309,6 +443,77 @@ class TestCorrectionCLI(unittest.TestCase):
             parser.parse_args([
                 "correct", "text", "--slug", "sample", "--dry-run", "--apply"
             ])
+
+
+class TestCorrectionEndToEnd(unittest.TestCase):
+    def test_import_correct_rebuild_answer_and_undo(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            root = Path(tmp) / "knowledge"
+            output = StringIO()
+            correction = "Samantha is Alex's friend, not her conversation partner"
+            with (
+                patch.dict(os.environ, {"OPENPERSONA_KNOWLEDGE": str(root)}),
+                redirect_stdout(output),
+                redirect_stderr(output),
+            ):
+                imported = main([
+                    "import",
+                    str(ROOT / "tests" / "fixtures" / "sample-whatsapp-localized.txt"),
+                    "--slug",
+                    "sample",
+                    "--persona",
+                    "Samantha",
+                    "--yes",
+                ])
+                previewed = main([
+                    "correct", correction, "--slug", "sample", "--dry-run"
+                ])
+                applied = main([
+                    "correct", correction, "--slug", "sample", "--apply"
+                ])
+
+            self.assertEqual((imported, previewed, applied), (0, 0, 0), output.getvalue())
+            dataset = root / "sample"
+            ledger_before_rebuild = dataset.joinpath("corrections", "ledger.jsonl").read_bytes()
+            _entities, relationships, _stats = query_kg._load_kg(dataset)
+            self.assertTrue(any(item["type"] == "friend_of" for item in relationships))
+            self.assertFalse(any(item["type"] == "communicates_with" for item in relationships))
+
+            from chromadb.api.client import SharedSystemClient
+
+            SharedSystemClient.clear_system_cache()
+            gc.collect()
+            rebuild_all.rebuild_dataset(dataset, "sample", atomic=True)
+            self.assertEqual(
+                dataset.joinpath("corrections", "ledger.jsonl").read_bytes(),
+                ledger_before_rebuild,
+            )
+            _entities, rebuilt, _stats = query_kg._load_kg(dataset)
+            self.assertTrue(any(item["type"] == "friend_of" for item in rebuilt))
+            self.assertFalse(any(item["type"] == "communicates_with" for item in rebuilt))
+
+            answer = answer_about_person(
+                dataset,
+                "Is Samantha Alex's friend or conversation partner?",
+                "Samantha",
+                LocalExtractiveProvider(),
+            )
+            self.assertFalse(answer.abstained)
+            self.assertEqual(answer.citations[0].source_type, "user_correction")
+            self.assertIn("friend_of", answer.citations[0].excerpt)
+
+            claim_id = correction_records(dataset)[0]["claim_id"]
+            with patch.dict(os.environ, {"OPENPERSONA_KNOWLEDGE": str(root)}):
+                undone = main([
+                    "corrections", "--slug", "sample", "undo", claim_id
+                ])
+            self.assertEqual(undone, 0)
+            _entities, restored, _stats = query_kg._load_kg(dataset)
+            self.assertTrue(any(item["type"] == "communicates_with" for item in restored))
+            self.assertFalse(any(item["type"] == "friend_of" for item in restored))
+
+            SharedSystemClient.clear_system_cache()
+            gc.collect()
 
 
 if __name__ == "__main__":

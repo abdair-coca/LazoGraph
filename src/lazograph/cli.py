@@ -394,6 +394,7 @@ def _print_correction_preview(preview) -> None:
     print("Knowledge correction preflight")
     print(f"  Dataset: {preview.dataset_slug}")
     print(f"  Fingerprint: {preview.fingerprint}")
+    print(f"  PII flags: {', '.join(preview.pii_flags) if preview.pii_flags else 'none'}")
     print(f"  Matched effective claims: {len(preview.matched_claims)}")
     if preview.already_applied:
         print("  Status: already applied; no write required")
