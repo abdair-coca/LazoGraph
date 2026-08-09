@@ -8,6 +8,7 @@ import sys
 from lazograph.config import ConfigurationError, knowledge_root, resolve_dataset
 from lazograph.domain.identity import IdentityResolutionError
 from lazograph.features.ask_person.service import GroundingError, answer_about_person
+from lazograph.features.add_context import ContextValidationError, build_context_preview
 from lazograph.infrastructure.llm import (
     HostedProvider,
     LocalExtractiveProvider,
@@ -93,6 +94,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print retrieval counts without unrelated private content",
     )
     ask_parser.set_defaults(handler=_run_ask)
+
+    context_parser = commands.add_parser(
+        "context",
+        help="Preview or add auditable manual context",
+    )
+    context_parser.add_argument("source", help="UTF-8 text or Markdown context file")
+    context_parser.add_argument("--slug", required=True, help="Dataset identifier")
+    context_parser.add_argument(
+        "--about",
+        help="Apply every record to one known participant; otherwise detect from text",
+    )
+    context_action = context_parser.add_mutually_exclusive_group(required=True)
+    context_action.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Classify and validate without writing",
+    )
+    context_action.add_argument(
+        "--apply",
+        action="store_true",
+        help="Persist context after a successful preflight",
+    )
+    context_parser.set_defaults(handler=_run_context)
     return parser
 
 
@@ -273,6 +297,42 @@ def _run_ask(args: argparse.Namespace) -> int:
     else:
         _print_answer(answer, debug=args.debug)
     return 0
+
+
+def _print_context_preview(preview) -> None:
+    print("Manual context preflight")
+    print(f"  Source: {preview.source}")
+    print(f"  Dataset: {preview.dataset_dir.name}")
+    print(f"  Source hash: {preview.source_sha256}")
+    print(f"  Records: {len(preview.records)} ({preview.new_records} new, {preview.duplicates} duplicates)")
+    print(f"  PII flags: {', '.join(preview.pii_flags) if preview.pii_flags else 'none'}")
+    for record in preview.records:
+        status = "duplicate" if record.duplicate else "new"
+        print(
+            f"    {record.number}. {record.kind} about {record.subject}; "
+            f"authority={record.authority}; confidence={record.confidence:.2f}; {status}"
+        )
+        print(f"       {record.content[:160]}")
+
+
+def _run_context(args: argparse.Namespace) -> int:
+    try:
+        dataset_dir = resolve_dataset(args.slug)
+        preview = build_context_preview(
+            args.source,
+            dataset_dir,
+            about=args.about,
+        )
+    except (ConfigurationError, ContextValidationError, OSError) as exc:
+        print(f"Context rejected: {exc}", file=sys.stderr)
+        return 2
+
+    _print_context_preview(preview)
+    if args.dry_run:
+        print("Dry run complete. No files written.")
+        return 0
+    print("Context apply is not available in this implementation increment.", file=sys.stderr)
+    return 2
 
 
 def main(argv: list[str] | None = None) -> int:
