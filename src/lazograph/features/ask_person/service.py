@@ -367,6 +367,33 @@ def answer_about_person(
         evidence_budget=evidence_budget,
         memory_search=memory_search,
     )
+    from lazograph.features.correct_knowledge.evidence import correction_evidence
+
+    correction_items = correction_evidence(
+        dataset_dir,
+        participant,
+        _topic_terms(question, participant),
+        limit=limit,
+    )
+    combined = []
+    consumed = 0
+    for item in [*correction_items, *evidence]:
+        if any(existing.message_id == item.message_id for existing in combined):
+            continue
+        cost = len(item.excerpt)
+        if combined and consumed + cost > evidence_budget:
+            continue
+        combined.append(item)
+        consumed += cost
+        if len(combined) >= limit:
+            break
+    evidence = combined
+    summary = {
+        **summary,
+        "correction_results": len(correction_items),
+        "selected_results": len(evidence),
+        "evidence_chars": consumed,
+    }
     summary = {**summary, "provider": provider.name, "hosted": provider.hosted}
     if _contradictory_preferences(question, participant, evidence):
         return _abstention(

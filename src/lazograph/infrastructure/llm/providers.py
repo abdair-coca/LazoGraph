@@ -133,7 +133,10 @@ class LocalExtractiveProvider:
             return ProviderOutput(text, (), 0.0, abstained=True)
 
         selected = tuple(evidence[:3])
-        has_manual_context = any(item.source_type == "user_context" for item in selected)
+        has_manual_context = any(
+            item.source_type in {"user_context", "user_correction"}
+            for item in selected
+        )
         if language == "es":
             lead = (
                 f"Según la evidencia guardada sobre {participant}:"

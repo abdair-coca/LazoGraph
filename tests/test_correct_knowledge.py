@@ -22,6 +22,8 @@ from lazograph.features.correct_knowledge import (
     correction_records,
     undo_correction,
 )
+from lazograph.features.ask_person.service import answer_about_person
+from lazograph.infrastructure.llm import LocalExtractiveProvider
 from scripts import query_kg
 
 
@@ -246,6 +248,56 @@ class TestCorrectionLedger(CorrectionFixture):
                 records[0]["claim_id"],
             ])
         self.assertEqual((applied, listed, undone), (0, 0, 0))
+
+    def test_active_correction_is_citable_and_undo_removes_it(self):
+        applied = self.apply()
+
+        def no_memories(_dataset, _query, *, participant, limit):
+            del participant, limit
+            return []
+
+        answer = answer_about_person(
+            self.dataset,
+            "¿Carlos es primo o hermano de Juan?",
+            "Carlos",
+            LocalExtractiveProvider(),
+            memory_search=no_memories,
+        )
+        self.assertFalse(answer.abstained)
+        self.assertEqual(len(answer.citations), 1)
+        citation = answer.citations[0]
+        self.assertEqual(citation.source_type, "user_correction")
+        self.assertEqual(citation.authority, "user")
+        self.assertEqual(citation.message_id, f'correction:{applied["record"]["claim_id"]}')
+        self.assertIn("evidencia guardada", answer.text)
+
+        undo_correction(self.dataset, applied["record"]["claim_id"])
+        after_undo = answer_about_person(
+            self.dataset,
+            "¿Carlos es primo o hermano de Juan?",
+            "Carlos",
+            LocalExtractiveProvider(),
+            memory_search=no_memories,
+        )
+        self.assertTrue(after_undo.abstained)
+        self.assertEqual(after_undo.citations, ())
+
+    def test_generated_graph_replacement_keeps_active_correction_effective(self):
+        self.apply()
+        db_path = self.dataset / ".mempalace" / "palace" / "knowledge_graph.sqlite3"
+        connection = sqlite3.connect(db_path)
+        connection.execute("DELETE FROM triples")
+        connection.execute(
+            "INSERT INTO triples VALUES (?, ?, ?, ?, ?, ?)",
+            ("1", "sibling_of", "2", 0.96, "rebuilt.jsonl", "2026-08-09T00:00:00"),
+        )
+        connection.commit()
+        connection.close()
+
+        _entities, relationships, _stats = query_kg._load_kg(self.dataset)
+        self.assertFalse(any(item["type"] == "sibling_of" for item in relationships))
+        corrected = next(item for item in relationships if item["type"] == "cousin_of")
+        self.assertEqual(corrected["source"].split(":", 1)[0], "correction")
 
 
 class TestCorrectionCLI(unittest.TestCase):

@@ -290,7 +290,7 @@ def _print_answer(answer, *, debug: bool) -> None:
                 f"  [{evidence.message_id}] {evidence.sender}, {timestamp}, "
                 f"score={evidence.score:.4f}"
             )
-            if evidence.source_type == "user_context":
+            if evidence.source_type in {"user_context", "user_correction"}:
                 print(
                     f"    provenance: {evidence.record_kind}; authority={evidence.authority}; "
                     f"authored_by={evidence.authored_by}"
