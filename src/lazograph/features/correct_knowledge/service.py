@@ -7,23 +7,13 @@ import re
 import unicodedata
 from pathlib import Path
 
-from lazograph.domain.correction import Claim, CorrectionPreview
+from lazograph.domain.correction import Claim, CorrectionPreview, SYMMETRIC_RELATIONS
 from scripts import query_kg
 
 
 class CorrectionValidationError(ValueError):
     """A correction is unsupported, ambiguous, or does not match effective knowledge."""
 
-
-SYMMETRIC_RELATIONS = {
-    "communicates_with",
-    "cousin_of",
-    "coworker_of",
-    "friend_of",
-    "romantic_partner",
-    "sibling_of",
-    "spouse_of",
-}
 
 _RELATIONS = {
     "brother": "sibling_of",
@@ -188,13 +178,23 @@ def _same_claim(
 def _claim_from_relationship(relationship: dict) -> Claim:
     raw_confidence = relationship.get("confidence", 0.0)
     confidence = float(raw_confidence) if isinstance(raw_confidence, (int, float)) else 0.0
+    claim_value = "|".join((
+        str(relationship.get("from", "")).casefold(),
+        str(relationship.get("type", "")).casefold(),
+        str(relationship.get("to", "")).casefold(),
+        str(relationship.get("source", "")),
+        str(relationship.get("timestamp", "")),
+    ))
+    claim_id = str(relationship.get("claim_id", "")) or (
+        "base-" + hashlib.sha256(claim_value.encode("utf-8")).hexdigest()[:16]
+    )
     return Claim(
         subject=str(relationship.get("from", "")),
         predicate=str(relationship.get("type", "")),
         object=str(relationship.get("to", "")),
         confidence=confidence,
         source=str(relationship.get("source", "")),
-        claim_id=str(relationship.get("correction_id", "")),
+        claim_id=claim_id,
     )
 
 
@@ -213,20 +213,45 @@ def build_correction_preview(text: str, dataset_dir: Path) -> CorrectionPreview:
         for relationship in relationships
         if _same_claim(relationship, subject, old_relation, object_name)
     )
-    if not matched:
-        raise CorrectionValidationError(
-            f"No effective {old_relation} claim connects {subject} and {object_name}."
-        )
-
     fingerprint_value = "|".join((
         _key(subject), old_relation, _key(object_name), new_relation,
     ))
     fingerprint = "sha256:" + hashlib.sha256(fingerprint_value.encode("utf-8")).hexdigest()
+    from .ledger import find_active_by_fingerprint
+
+    active = find_active_by_fingerprint(dataset_dir, fingerprint)
+    if active:
+        return CorrectionPreview(
+            raw_text=re.sub(r"\s+", " ", text).strip(),
+            dataset_slug=dataset_dir.name,
+            dataset_dir=dataset_dir,
+            fingerprint=fingerprint,
+            retract=Claim(subject, old_relation, object_name, 1.0, "user_correction"),
+            assert_claim=Claim(subject, new_relation, object_name, 1.0, "user_correction"),
+            matched_claims=(),
+            already_applied=True,
+        )
+    if not matched:
+        raise CorrectionValidationError(
+            f"No effective {old_relation} claim connects {subject} and {object_name}."
+        )
     return CorrectionPreview(
         raw_text=re.sub(r"\s+", " ", text).strip(),
         dataset_slug=dataset_dir.name,
+        dataset_dir=dataset_dir,
         fingerprint=fingerprint,
         retract=Claim(subject, old_relation, object_name, 1.0, "user_correction"),
         assert_claim=Claim(subject, new_relation, object_name, 1.0, "user_correction"),
         matched_claims=matched,
     )
+
+
+def apply_correction(preview: CorrectionPreview) -> dict:
+    """Revalidate immediately, then append one correction event or return a no-op."""
+    dataset_dir = preview.dataset_dir
+    current = build_correction_preview(preview.raw_text, dataset_dir)
+    if current.fingerprint != preview.fingerprint:
+        raise CorrectionValidationError("Correction changed after preflight; run it again.")
+    from .ledger import append_correction
+
+    return append_correction(dataset_dir, current)

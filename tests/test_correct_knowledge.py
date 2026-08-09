@@ -15,9 +15,14 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from lazograph.cli import build_parser, main
 from lazograph.features.correct_knowledge import (
+    CorrectionLedgerError,
     CorrectionValidationError,
+    apply_correction,
     build_correction_preview,
+    correction_records,
+    undo_correction,
 )
+from scripts import query_kg
 
 
 class CorrectionFixture(unittest.TestCase):
@@ -127,6 +132,120 @@ class TestCorrectionPreview(CorrectionFixture):
         }
         self.assertEqual(result, 0)
         self.assertEqual(after, before)
+
+
+class TestCorrectionLedger(CorrectionFixture):
+    def apply(self):
+        preview = build_correction_preview(
+            "Carlos no es hermano de Juan, es su primo",
+            self.dataset,
+        )
+        return apply_correction(preview)
+
+    def test_apply_preserves_generated_db_and_projects_effective_graph(self):
+        db_path = self.dataset / ".mempalace" / "palace" / "knowledge_graph.sqlite3"
+        before = db_path.read_bytes()
+        result = self.apply()
+        after = db_path.read_bytes()
+
+        self.assertTrue(result["appended"])
+        self.assertRegex(result["record"]["claim_id"], r"^claim-[0-9a-f]{16}$")
+        self.assertEqual(before, after)
+        events = self.dataset.joinpath("corrections", "ledger.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(len(events), 1)
+        entities, relationships, stats = query_kg._load_kg(self.dataset)
+        self.assertEqual(entities, {"Carlos", "Juan"})
+        self.assertFalse(any(item["type"] == "sibling_of" for item in relationships))
+        effective = next(item for item in relationships if item["type"] == "cousin_of")
+        self.assertEqual(effective["confidence"], 1.0)
+        self.assertEqual(effective["authority"], "user")
+        self.assertEqual(effective["provenance"], "user_correction")
+        self.assertEqual(stats["active_corrections"], 1)
+        self.assertEqual(stats["retracted_relationships"], 1)
+
+    def test_reapply_is_idempotent(self):
+        first = self.apply()
+        repeated_preview = build_correction_preview(
+            "Carlos no es hermano de Juan, es su primo",
+            self.dataset,
+        )
+        self.assertTrue(repeated_preview.already_applied)
+        repeated = apply_correction(repeated_preview)
+        self.assertFalse(repeated["appended"])
+        self.assertEqual(repeated["record"]["claim_id"], first["record"]["claim_id"])
+        lines = self.dataset.joinpath("corrections", "ledger.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(len(lines), 1)
+
+    def test_undo_appends_history_and_restores_generated_claim(self):
+        applied = self.apply()
+        claim_id = applied["record"]["claim_id"]
+        result = undo_correction(self.dataset, claim_id)
+
+        self.assertTrue(result["appended"])
+        self.assertRegex(result["event"]["event_id"], r"^undo-[0-9a-f]{16}$")
+        records = correction_records(self.dataset)
+        self.assertEqual(records[0]["status"], "undone")
+        lines = self.dataset.joinpath("corrections", "ledger.jsonl").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        self.assertEqual(len(lines), 2)
+        _entities, relationships, stats = query_kg._load_kg(self.dataset)
+        self.assertTrue(any(item["type"] == "sibling_of" for item in relationships))
+        self.assertFalse(any(item["type"] == "cousin_of" for item in relationships))
+        self.assertEqual(stats["active_corrections"], 0)
+
+        repeated = undo_correction(self.dataset, claim_id)
+        self.assertFalse(repeated["appended"])
+        self.assertEqual(
+            len(self.dataset.joinpath("corrections", "ledger.jsonl").read_text(encoding="utf-8").splitlines()),
+            2,
+        )
+
+    def test_assertion_or_retraction_id_can_undo_atomic_correction(self):
+        applied = self.apply()
+        assertion_id = applied["record"]["assert"]["claim_id"]
+        result = undo_correction(self.dataset, assertion_id)
+        self.assertTrue(result["appended"])
+        self.assertEqual(result["record"]["status"], "undone")
+
+    def test_corrupt_or_locked_ledger_fails_without_graph_mutation(self):
+        corrections = self.dataset / "corrections"
+        corrections.mkdir()
+        corrections.joinpath("ledger.jsonl").write_text("not-json\n", encoding="utf-8")
+        with self.assertRaisesRegex(CorrectionLedgerError, "invalid"):
+            query_kg._load_kg(self.dataset)
+        corrections.joinpath("ledger.jsonl").unlink()
+        corrections.joinpath(".ledger.lock").mkdir()
+        preview = build_correction_preview(
+            "Carlos no es hermano de Juan, es su primo", self.dataset
+        )
+        with self.assertRaisesRegex(CorrectionLedgerError, "locked"):
+            apply_correction(preview)
+        self.assertFalse(corrections.joinpath("ledger.jsonl").exists())
+
+    def test_cli_apply_list_and_undo(self):
+        with patch.dict(os.environ, {"OPENPERSONA_KNOWLEDGE": str(self.root)}):
+            applied = main([
+                "correct",
+                "Carlos no es hermano de Juan, es su primo",
+                "--slug",
+                "sample",
+                "--apply",
+            ])
+            records = correction_records(self.dataset)
+            listed = main(["corrections", "--slug", "sample", "list"])
+            undone = main([
+                "corrections",
+                "--slug",
+                "sample",
+                "undo",
+                records[0]["claim_id"],
+            ])
+        self.assertEqual((applied, listed, undone), (0, 0, 0))
 
 
 class TestCorrectionCLI(unittest.TestCase):

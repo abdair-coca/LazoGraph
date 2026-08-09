@@ -3,7 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
+
+
+SYMMETRIC_RELATIONS = frozenset({
+    "communicates_with",
+    "cousin_of",
+    "coworker_of",
+    "friend_of",
+    "romantic_partner",
+    "sibling_of",
+    "spouse_of",
+})
 
 
 @dataclass(frozen=True)
@@ -23,6 +35,7 @@ class Claim:
 class CorrectionPreview:
     raw_text: str
     dataset_slug: str
+    dataset_dir: Path
     fingerprint: str
     retract: Claim
     assert_claim: Claim
@@ -33,6 +46,7 @@ class CorrectionPreview:
         return {
             "raw_text": self.raw_text,
             "dataset_slug": self.dataset_slug,
+            "dataset_dir": str(self.dataset_dir),
             "fingerprint": self.fingerprint,
             "retract": self.retract.to_dict(),
             "assert": self.assert_claim.to_dict(),

@@ -1,5 +1,21 @@
 """Slice 4: safe, auditable knowledge correction."""
 
-from .service import CorrectionValidationError, build_correction_preview
+from .ledger import (
+    CorrectionLedgerError,
+    correction_records,
+    undo_correction,
+)
+from .service import (
+    CorrectionValidationError,
+    apply_correction,
+    build_correction_preview,
+)
 
-__all__ = ["CorrectionValidationError", "build_correction_preview"]
+__all__ = [
+    "CorrectionLedgerError",
+    "CorrectionValidationError",
+    "apply_correction",
+    "build_correction_preview",
+    "correction_records",
+    "undo_correction",
+]

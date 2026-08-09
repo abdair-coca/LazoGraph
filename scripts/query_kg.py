@@ -92,6 +92,32 @@ def _load_kg(
     *,
     profiles: list[dict] | None = None,
 ) -> tuple[set[str], list[dict], dict | None]:
+    """Load generated graph and overlay active user corrections for effective reads."""
+    entities, relationships, native_stats = _load_base_kg(dataset_dir, profiles=profiles)
+    from lazograph.features.correct_knowledge.ledger import project_effective_graph
+
+    entities, relationships, correction_stats = project_effective_graph(
+        dataset_dir,
+        entities,
+        relationships,
+    )
+    if correction_stats["correction_records"] == 0:
+        return entities, relationships, native_stats
+    stats = dict(native_stats or {})
+    stats.update(correction_stats)
+    if correction_stats["active_corrections"]:
+        stats.update({
+            "entities": len(entities),
+            "triples": len(relationships),
+        })
+    return entities, relationships, stats
+
+
+def _load_base_kg(
+    dataset_dir: Path,
+    *,
+    profiles: list[dict] | None = None,
+) -> tuple[set[str], list[dict], dict | None]:
     """Load entities and relationships from MemPalace KG or fallback JSON."""
     palace_dir = dataset_dir / '.mempalace' / 'palace'
     db_path = palace_dir / 'knowledge_graph.sqlite3'

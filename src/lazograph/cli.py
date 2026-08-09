@@ -14,8 +14,12 @@ from lazograph.features.add_context import (
     build_context_preview,
 )
 from lazograph.features.correct_knowledge import (
+    CorrectionLedgerError,
     CorrectionValidationError,
+    apply_correction,
     build_correction_preview,
+    correction_records,
+    undo_correction,
 )
 from lazograph.infrastructure.llm import (
     HostedProvider,
@@ -136,6 +140,20 @@ def build_parser() -> argparse.ArgumentParser:
     correct_action.add_argument("--dry-run", action="store_true", help="Preview without writing")
     correct_action.add_argument("--apply", action="store_true", help="Append to correction ledger")
     correct_parser.set_defaults(handler=_run_correct)
+
+    corrections_parser = commands.add_parser(
+        "corrections",
+        help="Inspect or undo correction claims",
+    )
+    corrections_parser.add_argument("--slug", required=True, help="Dataset identifier")
+    correction_commands = corrections_parser.add_subparsers(dest="correction_command", required=True)
+    list_parser = correction_commands.add_parser("list", help="List immutable correction history")
+    list_parser.add_argument("--json", action="store_true", help="Output JSON")
+    list_parser.set_defaults(handler=_run_corrections)
+    undo_parser = correction_commands.add_parser("undo", help="Undo one active correction claim")
+    undo_parser.add_argument("claim_id", help="Correction, assertion, or retraction claim ID")
+    undo_parser.add_argument("--json", action="store_true", help="Output JSON")
+    undo_parser.set_defaults(handler=_run_corrections)
     return parser
 
 
@@ -377,6 +395,8 @@ def _print_correction_preview(preview) -> None:
     print(f"  Dataset: {preview.dataset_slug}")
     print(f"  Fingerprint: {preview.fingerprint}")
     print(f"  Matched effective claims: {len(preview.matched_claims)}")
+    if preview.already_applied:
+        print("  Status: already applied; no write required")
     for claim in preview.matched_claims:
         print(
             f"    - {claim.subject} --{claim.predicate}--> {claim.object}; "
@@ -403,8 +423,60 @@ def _run_correct(args: argparse.Namespace) -> int:
     if args.dry_run:
         print("Dry run complete. No files written.")
         return 0
-    print("Correction apply is not available in this implementation increment.", file=sys.stderr)
-    return 2
+    try:
+        result = apply_correction(preview)
+    except (ConfigurationError, CorrectionValidationError, CorrectionLedgerError, RuntimeError, OSError) as exc:
+        print(f"Correction apply failed: {exc}", file=sys.stderr)
+        return 2
+    record = result["record"]
+    if not result["appended"]:
+        print(f'Already applied. Active claim: {record["claim_id"]}')
+        return 0
+    print("Correction applied.")
+    print(f'  Claim ID: {record["claim_id"]}')
+    print("  Generated graph/source data: unchanged")
+    print("  Effective graph: updated")
+    return 0
+
+
+def _run_corrections(args: argparse.Namespace) -> int:
+    try:
+        dataset_dir = resolve_dataset(args.slug)
+        if args.correction_command == "undo":
+            result = undo_correction(dataset_dir, args.claim_id)
+            if args.json:
+                import json
+
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            elif result["appended"]:
+                print(f'Correction undone: {result["record"]["claim_id"]}')
+                print(f'Undo event: {result["event"]["event_id"]}')
+            else:
+                print(f'Already undone: {result["record"]["claim_id"]}')
+            return 0
+        records = correction_records(dataset_dir)
+    except (ConfigurationError, CorrectionLedgerError, RuntimeError, OSError) as exc:
+        print(f"Corrections failed: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        import json
+
+        print(json.dumps(records, indent=2, ensure_ascii=False))
+        return 0
+    print(f"Corrections: {len(records)}")
+    for record in records:
+        assertion = record["assert"]
+        retraction = record["retract"]
+        print(f'  {record["claim_id"]} [{record["status"]}] {record["created_at"]}')
+        print(
+            f'    retract {retraction["subject"]} --{retraction["predicate"]}--> '
+            f'{retraction["object"]}'
+        )
+        print(
+            f'    assert  {assertion["subject"]} --{assertion["predicate"]}--> '
+            f'{assertion["object"]}'
+        )
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
