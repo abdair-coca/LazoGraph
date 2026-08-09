@@ -1,8 +1,7 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slice 1's `lazo import` command is accepted. Slice 2's `lazo ask`
-> command is implemented and awaiting feedback. Commands in Slices 3–8 remain planned and are not
-> implemented. Existing
+> **Gated delivery document.** Slices 1 and 2 are accepted. Slice 3 is in progress. Commands in
+> Slices 4–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -92,8 +91,8 @@ This table is the single source of truth for roadmap progress.
 | Slice | Capability | Status | Availability | Acceptance |
 |---:|---|---|---|---|
 | 1 | Import Chat | Accepted | Available | Accepted |
-| 2 | Ask About a Person | Awaiting Feedback | Demo ready | Pending |
-| 3 | Add Manual Context | Planned | Locked by Slice 2 | Pending |
+| 2 | Ask About a Person | Accepted | Available | Accepted |
+| 3 | Add Manual Context | In Progress | Under development | Pending |
 | 4 | Correct Knowledge | Planned | Locked by Slice 3 | Pending |
 | 5 | Ask About Relationships | Planned | Locked by Slice 4 | Pending |
 | 6 | Pending Plans | Planned | Locked by Slice 5 | Pending |
@@ -306,7 +305,7 @@ python scripts/diagnose.py --slug sample
 
 ## Slice 2 — Ask About a Person
 
-**Status:** Awaiting Feedback
+**Status:** Accepted
 **Dependency:** Slice 1 accepted  
 **Unlocks:** Slice 3
 
@@ -314,7 +313,7 @@ python scripts/diagnose.py --slug sample
 
 Answer grounded questions about one known participant with verifiable citations.
 
-### Implemented interface — awaiting feedback
+### Implemented interface
 
 ```bash
 lazo ask "What does Alex like?" --about Alex
@@ -386,19 +385,19 @@ lazo ask "¿Qué cosas le gustan a Alex?" --about Alex
 
 | Field | Value |
 |---|---|
-| Decision | Pending |
+| Decision | Accepted |
 | Required phrase | `Slice 2 accepted` |
-| Date | — |
-| Implementation commit | — |
-| Test results | — |
-| Demo command | — |
-| User notes | — |
+| Date | 2026-08-08 |
+| Implementation commit | `532e95e` |
+| Test results | 138 automated tests passed; real-data grounded answer and abstention demos passed |
+| Demo command | `lazo ask "What does Alex like?" --about Alex --slug sample --debug` |
+| User notes | Grounded person-answer behavior approved; continue to Slice 3 with smaller, frequent commits |
 
 ---
 
 ## Slice 3 — Add Manual Context
 
-**Status:** Planned  
+**Status:** In Progress
 **Dependency:** Slice 2 accepted  
 **Unlocks:** Slice 4
 
@@ -407,7 +406,7 @@ lazo ask "¿Qué cosas le gustan a Alex?" --about Alex
 Add user-provided context through the same privacy, provenance, retrieval, and consistency system
 used by imported sources.
 
-### Planned interface — not implemented
+### Target interface — implementation in progress
 
 ```bash
 lazo context context.txt --slug sample --dry-run
