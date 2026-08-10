@@ -278,7 +278,15 @@ def _support_for_edge(
 
     same_source = [item for item in records if _same_source(edge, item, source_origins)]
     timestamp = str(edge.get("timestamp", "") or "")
-    exact = [item for item in same_source if timestamp and item.timestamp == timestamp]
+    exact = [
+        item for item in same_source
+        if timestamp and item.timestamp
+        and (
+            str(item.timestamp) == timestamp
+            or str(item.timestamp).startswith(timestamp)
+            or timestamp.startswith(str(item.timestamp))
+        )
+    ]
     if exact:
         return exact[:1]
     endpoints = {str(edge.get("from", "")), str(edge.get("to", ""))}
@@ -414,7 +422,8 @@ def answer_about_relationship(
         )
 
     edges = _path_edges(path, relationships, question)
-    records, source_origins = _persisted_evidence(dataset_dir, {left, right})
+    records, source_origins = _persisted_evidence(dataset_dir, set(path))
+    endpoint_records = [item for item in records if item.sender in {left, right}]
     selected: list[Evidence] = []
     facts: list[str] = []
 
@@ -439,7 +448,7 @@ def answer_about_relationship(
         facts.append(_relation_fact(edge, graph_item, support, language))
 
     temporal = sorted(
-        (item for item in records if item.timestamp),
+        (item for item in endpoint_records if item.timestamp),
         key=lambda item: (str(item.timestamp), item.message_id),
     )
     if temporal:
