@@ -40,7 +40,7 @@ from .features.import_chat.service import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lazo", description="LazoGraph personal knowledge CLI")
-    parser.add_argument("--version", action="version", version="LazoGraph 0.7.0")
+    parser.add_argument("--version", action="version", version="LazoGraph 0.8.0")
     commands = parser.add_subparsers(dest="command", required=True)
 
     import_parser = commands.add_parser(
