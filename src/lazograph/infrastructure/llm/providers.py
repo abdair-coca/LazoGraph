@@ -45,6 +45,12 @@ def _safe_context(context: dict[str, Any]) -> dict[str, Any]:
             "last_seen",
             "relationship_types",
             "wiki_pages",
+            "answer_mode",
+            "entities",
+            "relationship_hops",
+            "relationship_path",
+            "observed_period",
+            "wiki_relationship_mentions",
         )
         if key in context
     }
@@ -123,7 +129,7 @@ class LocalExtractiveProvider:
         *,
         language: str,
     ) -> ProviderOutput:
-        del question, context
+        del question
         if not evidence:
             text = (
                 f"No encontré evidencia suficiente sobre {participant}."
@@ -131,6 +137,45 @@ class LocalExtractiveProvider:
                 else f"I found insufficient evidence about {participant}."
             )
             return ProviderOutput(text, (), 0.0, abstained=True)
+
+        if context.get("answer_mode") == "relationship":
+            graph_items = [
+                item for item in evidence
+                if item.record_kind == "effective_relationship"
+            ]
+            if not graph_items:
+                text = (
+                    "No encontré una ruta relacional efectiva respaldada."
+                    if language == "es"
+                    else "I found no supported effective relationship path."
+                )
+                return ProviderOutput(text, (), 0.0, abstained=True)
+            path = context.get("relationship_path", [])
+            direct = context.get("relationship_hops") == 1
+            relation_types = ", ".join(
+                dict.fromkeys(
+                    str(item.get("label") or item.get("type", "")).replace("_", " ")
+                    for item in path
+                )
+            )
+            markers = " ".join(f"[{item.message_id}]" for item in graph_items)
+            if language == "es":
+                text = (
+                    f"El grafo efectivo respalda una conexión {'directa' if direct else 'indirecta'} "
+                    f"mediante {relation_types}; no infiero una relación adicional fuera de esos "
+                    f"hechos observados. {markers}"
+                )
+            else:
+                text = (
+                    f"The effective graph supports a {'direct' if direct else 'indirect'} connection "
+                    f"through {relation_types}; I do not infer any additional relationship beyond "
+                    f"those observed facts. {markers}"
+                )
+            return ProviderOutput(
+                text=text,
+                citation_ids=tuple(item.message_id for item in graph_items),
+                confidence=min(item.score for item in graph_items),
+            )
 
         selected = tuple(evidence[:3])
         has_manual_context = any(

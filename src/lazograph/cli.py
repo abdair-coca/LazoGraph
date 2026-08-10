@@ -8,6 +8,7 @@ import sys
 from lazograph.config import ConfigurationError, knowledge_root, resolve_dataset
 from lazograph.domain.identity import IdentityResolutionError
 from lazograph.features.ask_person.service import GroundingError, answer_about_person
+from lazograph.features.ask_relationship import answer_about_relationship
 from lazograph.features.add_context import (
     ContextValidationError,
     apply_context,
@@ -80,10 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     ask_parser = commands.add_parser(
         "ask",
-        help="Answer a grounded question about one participant",
+        help="Answer a grounded question about one participant or relationship",
     )
     ask_parser.add_argument("question", help="Question to answer")
-    ask_parser.add_argument("--about", required=True, help="Canonical participant or alias")
+    ask_parser.add_argument(
+        "--about",
+        help="Canonical participant or alias; omit for a two-person relationship question",
+    )
     ask_parser.add_argument("--slug", help="Dataset identifier; optional when only one exists")
     ask_parser.add_argument(
         "--provider",
@@ -92,7 +96,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Inference provider (default: local extractive)",
     )
     ask_parser.add_argument("--model", help="Model override for Ollama or hosted provider")
-    ask_parser.add_argument("--limit", type=int, default=5, help="Maximum evidence items")
+    ask_parser.add_argument(
+        "--limit",
+        type=int,
+        default=5,
+        help="Maximum retrieved items; mandatory relationship-path evidence is retained",
+    )
     ask_parser.add_argument(
         "--evidence-budget",
         type=int,
@@ -313,14 +322,24 @@ def _run_ask(args: argparse.Namespace) -> int:
         return 2
     try:
         dataset_dir = resolve_dataset(args.slug)
-        answer = answer_about_person(
-            dataset_dir,
-            args.question,
-            args.about,
-            _answer_provider(args),
-            limit=args.limit,
-            evidence_budget=args.evidence_budget,
-        )
+        provider = _answer_provider(args)
+        if args.about:
+            answer = answer_about_person(
+                dataset_dir,
+                args.question,
+                args.about,
+                provider,
+                limit=args.limit,
+                evidence_budget=args.evidence_budget,
+            )
+        else:
+            answer = answer_about_relationship(
+                dataset_dir,
+                args.question,
+                provider,
+                limit=args.limit,
+                evidence_budget=args.evidence_budget,
+            )
     except (
         ConfigurationError,
         IdentityResolutionError,

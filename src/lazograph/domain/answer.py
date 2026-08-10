@@ -41,6 +41,8 @@ class Answer:
     entities: tuple[str, ...]
     retrieval_summary: dict[str, Any] = field(default_factory=dict)
     abstained: bool = False
+    facts: tuple[str, ...] = ()
+    inferences: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -50,4 +52,6 @@ class Answer:
             "entities": list(self.entities),
             "retrieval_summary": self.retrieval_summary,
             "abstained": self.abstained,
+            "facts": list(self.facts),
+            "inferences": list(self.inferences),
         }

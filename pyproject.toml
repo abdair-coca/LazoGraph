@@ -23,6 +23,7 @@ packages = [
   "lazograph.features",
   "lazograph.features.import_chat",
   "lazograph.features.ask_person",
+  "lazograph.features.ask_relationship",
   "lazograph.features.add_context",
   "lazograph.features.correct_knowledge",
   "lazograph.domain",
