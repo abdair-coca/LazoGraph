@@ -1,7 +1,7 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1–3 are accepted. Slice 4 is awaiting feedback. Commands in
-> Slices 5–8 remain planned and are not implemented. Existing
+> **Gated delivery document.** Slices 1–4 are accepted. Slice 5 is in progress. Commands in
+> Slices 6–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -90,8 +90,8 @@ This table is the single source of truth for roadmap progress.
 | 1 | Import Chat | Accepted | Available | Accepted |
 | 2 | Ask About a Person | Accepted | Available | Accepted |
 | 3 | Add Manual Context | Accepted | Available | Accepted |
-| 4 | Correct Knowledge | Awaiting Feedback | Demo ready | Pending |
-| 5 | Ask About Relationships | Planned | Locked by Slice 4 | Pending |
+| 4 | Correct Knowledge | Accepted | Available | Accepted |
+| 5 | Ask About Relationships | In Progress | Under development | Pending |
 | 6 | Pending Plans | Planned | Locked by Slice 5 | Pending |
 | 7 | Grounded Suggestions | Planned | Locked by Slice 6 | Pending |
 | 8 | Describe a Relationship | Planned | Locked by Slice 7 | Pending |
@@ -569,29 +569,29 @@ lazo corrections --slug sample undo <claim-id>
 
 ### Feedback checklist
 
-- [ ] Proposed change matches intended meaning.
-- [ ] Preview is safe and readable.
-- [ ] Corrected answers behave as expected.
-- [ ] History and undo are understandable.
-- [ ] User priority feels correct without hiding provenance.
+- [x] Proposed change matches intended meaning.
+- [x] Preview is safe and readable.
+- [x] Corrected answers behave as expected.
+- [x] History and undo are understandable.
+- [x] User priority feels correct without hiding provenance.
 
 ### Acceptance record
 
 | Field | Value |
 |---|---|
-| Decision | Pending |
+| Decision | Accepted |
 | Required phrase | `Slice 4 accepted` |
-| Date | — |
-| Implementation commit | — |
-| Test results | — |
-| Demo command | — |
-| User notes | — |
+| Date | 2026-08-10 |
+| Implementation commit | `e36dcc1` |
+| Test results | 177 automated tests passed; correction/rebuild/answer/undo E2E and real identity-shadow repair passed |
+| Demo command | Dry-run; apply; list; effective KG query; atomic rebuild; cited ask; undo |
+| User notes | Full flow worked; expanded-name false entity was reported, fixed, rebuilt, and verified before acceptance |
 
 ---
 
 ## Slice 5 — Ask About Relationships
 
-**Status:** Planned  
+**Status:** In Progress  
 **Dependency:** Slice 4 accepted  
 **Unlocks:** Slice 6
 
@@ -600,7 +600,7 @@ lazo corrections --slug sample undo <claim-id>
 Explain who a person is and how people are connected using effective graph knowledge and original
 evidence.
 
-### Planned interface — not implemented
+### Target interface — implementation in progress
 
 ```bash
 lazo ask "Who is Carlos and how is he related to Juanita?"
