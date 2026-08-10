@@ -1,277 +1,369 @@
-# persona-knowledge
+# LazoGraph
 
-Persistent, incremental, searchable persona knowledge base — the **data layer** between raw sources and persona training.
+Local-first personal knowledge system that turns life data into searchable memories, an identity-aware knowledge graph, an evidence-backed wiki, and safe training exports.
 
-## What it does
+LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/persona-knowledge) and now includes deterministic participant identity, recoverable ingestion, transactional rebuilds, functional smoke tests, conservative graph extraction, and PII-aware exports.
 
-```
-Data sources                  persona-knowledge                 Downstream consumers
-───────────────          →   ──────────────────────      →   ──────────────────────
-Obsidian vault                Storage: MemPalace              anyone-skill
-GBrain export                 Graph: Knowledge Graph            (4D extraction)
-WhatsApp / Telegram           Knowledge: Karpathy Wiki        persona-model-trainer
-X (Twitter) / Instagram       Export: training/                 (fine-tuning)
-iMessage / Signal
-.md / .txt / .csv / .pdf
-.jsonl / .json
-```
+## Current capabilities
+
+- Import WhatsApp, Telegram, Signal, iMessage, social archives, Markdown, JSON/JSONL, CSV, PDF, and Obsidian vaults.
+- Parse localized Spanish WhatsApp timestamps, multiline messages, and narrow/non-breaking spaces.
+- Identify the persona and contacts independently; canonicalize expanded compound names and resolve
+  stable aliases without mixing authorship.
+- Deduplicate messages and detect equivalent source backups before they corrupt derived layers.
+- Store verbatim memories in MemPalace/ChromaDB and search them semantically by participant.
+- Build a SQLite knowledge graph with participant, communication, relationship, entity, and confidence data.
+- Build and lint six evidence-backed wiki pages.
+- Rebuild vectors, graph, and wiki atomically with rollback.
+- Diagnose all persisted layers and run functional post-rebuild smoke tests.
+- Inspect and transactionally restore quarantined sources.
+- Export authentic user/assistant pairs with `block`, `redact`, or explicit `allow` PII policies.
+- Run a disposable end-to-end test on Windows, macOS, or Linux.
+- Preview and import a chat through the packaged `lazo import` command with explicit participant
+  selection and invariant validation.
+- Ask grounded questions about one participant through `lazo ask`, with persisted citations,
+  canonical alias isolation, confidence, and safe abstention.
+- Preview and apply manual context through `lazo context`, with explicit authority levels,
+  source hashes, PII warnings, idempotency, rollback, and grounded retrieval.
+- Preview, apply, audit, and undo relationship corrections through an immutable ledger; effective
+  graph queries and grounded answers honor user corrections without altering generated triples.
+
+Current boundary: chat import, person-specific grounded answers, and manual context are accepted.
+Knowledge correction is demo-ready and awaiting feedback. Relationship synthesis, plans,
+suggestions, and relationship descriptions remain gated roadmap work.
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────┐
-│                persona-knowledge                   │
-│                                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
-│  │ MemPalace│  │Knowledge │  │  Karpathy    │  │
-│  │ (ChromaDB│  │  Graph   │  │  LLM Wiki    │  │
-│  │ +SQLite) │  │ (SQLite) │  │  (Markdown)  │  │
-│  └────┬─────┘  └────┬─────┘  └──────┬───────┘  │
-│       │              │               │           │
-│       └──────────────┼───────────────┘           │
-│                      │                           │
-│              ┌───────┴───────┐                   │
-│              │   Export      │                   │
-│              │  training/    │                   │
-│              └───────────────┘                   │
-└─────────────────────────────────────────────────┘
+```text
+Raw life data
+    |
+    v
+Adapters -> normalized messages -> immutable source backups
+                                  |
+                 +----------------+----------------+
+                 |                |                |
+                 v                v                v
+          semantic memory   knowledge graph   participant profiles
+          ChromaDB/SQLite       SQLite             JSON
+                 |                |                |
+                 +----------------+----------------+
+                                  |
+                                  v
+                         evidence-backed wiki
+                                  |
+                                  v
+                    PII-governed training export
 ```
 
-**Four layers:**
+See [Architecture](docs/ARCHITECTURE.md) for component boundaries, invariants, transactions, and privacy rules.
 
-| Layer | Technology | Role |
-|-------|-----------|------|
-| **Storage** | MemPalace (ChromaDB + SQLite) | Verbatim content, semantic search |
-| **Graph** | MemPalace Knowledge Graph | Entity-relationship graph with temporal validity |
-| **Knowledge** | Karpathy LLM Wiki (interlinked .md) | LLM-maintained structured knowledge accumulation |
-| **Export** | `export_training.py` | Generate `training/` for persona-model-trainer |
+## Requirements
+
+- Python 3.11+
+- `mempalace >= 3.1.0`
+- About 1–2 GB free disk for ChromaDB and its embedding model
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+```
+
+On macOS/Linux, replace activation with `source .venv/bin/activate` and use `python` in the commands below.
 
 ## Quick start
 
-### Requirements
+Set an explicit private knowledge root. Dataset contents are not stored in the Git repository.
 
-- Python >= 3.11
-- `pip install mempalace` (~1-2 GB disk for ChromaDB)
+```powershell
+$env:PYTHONUTF8='1'
+$env:OPENPERSONA_KNOWLEDGE="$env:LOCALAPPDATA\LazoGraph\knowledge"
+```
 
-### 1. Initialize
+### 1. Preview the chat
 
-```bash
+```powershell
+lazo import "C:\path\to\whatsapp.txt" `
+  --slug sam `
+  --persona "Samantha" `
+  --dry-run
+```
+
+The preview shows adapter, participant candidates, persona/contact counts, rejected system notices,
+duplicates, PII flags, and equivalent backups. It never writes.
+
+### 2. Import
+
+```powershell
+lazo import "C:\path\to\whatsapp.txt" --slug sam --persona "Samantha"
+```
+
+Confirm after reviewing the same preflight. The command initializes a missing dataset, imports all
+layers, then validates cross-layer invariants. Use `--yes` only for reviewed automation.
+
+Existing script commands remain supported:
+
+```powershell
 python scripts/init_knowledge.py --slug sam --name "Samantha"
+python scripts/ingest.py `
+  --slug sam `
+  --source "C:\path\to\whatsapp.txt" `
+  --adapter chat_export `
+  --persona-name "Samantha"
 ```
 
-### 2. Ingest data
+Equivalent active sources stop before any write. Use `--reconcile-equivalent-source` to preview and confirm recoverable replacement, or `--allow-equivalent-source` only when both sources are intentionally distinct.
 
-```bash
-# WhatsApp chat
-python scripts/ingest.py --slug sam --source ~/whatsapp-export.txt --persona-name "Samantha"
+### 3. Build derived knowledge
 
-# Twitter archive
-python scripts/ingest.py --slug sam --source ~/twitter-archive/ --persona-name "Sam"
-
-# Obsidian vault
-python scripts/ingest.py --slug sam --source ~/obsidian-vault/
-
-# Generic JSONL
-python scripts/ingest.py --slug sam --source data.jsonl --persona-name "Sam"
-
-# Dry run (parse without writing)
-python scripts/ingest.py --slug sam --source data.txt --dry-run
-```
-
-### 3. Build wiki
-
-Build all six persona pages from messages authored by the independently identified
-persona. Evidence references point to exact source-backup lines; private content
-never leaves the local machine.
-
-```bash
+```powershell
+python scripts/ingest.py --slug sam --rebuild-kg
+python scripts/ingest.py --slug sam --rebuild-vectors
 python scripts/build_wiki.py --slug sam --dry-run
 python scripts/build_wiki.py --slug sam
 python scripts/lint_wiki.py --slug sam
 ```
 
-The deterministic builder provides a verified baseline. Human or agent review can
-add nuance later while keeping the evidence protocol in `wiki/_schema.md`.
+For one coordinated transaction:
 
-### 4. Export for training
-
-```bash
-python scripts/export_training.py --slug sam --output training/
+```powershell
+python scripts/rebuild_all.py --slug sam --atomic
 ```
 
-Exports block detected PII by default before creating output. Choose redaction for shareable
-artifacts; use `allow` only after explicit review:
+Atomic rebuild runs vectors, graph, wiki, wiki lint, and functional smoke tests. Any failed stage restores the previous derived state.
 
-```bash
-python scripts/export_training.py --slug sam --output training/ --pii-policy redact
-python scripts/export_training.py --slug sam --output training/ --pii-policy allow
-```
+### 4. Search memories and graph
 
-Redaction covers raw copies, conversations, profile, and probes. Original private dataset files
-remain unchanged. Export metadata records detected types, policy, and replacement totals.
+```powershell
+lazo ask "¿Qué cosas le gustan a Samantha?" --about Samantha --slug sam
 
-Output:
+python scripts/query_memory.py `
+  --slug sam `
+  --query "work and projects" `
+  --participant "Sam" `
+  --limit 5
 
-```
-training/
-  raw/                    # authentic source files
-  conversations.jsonl     # distilled Q-A pairs
-  profile.md              # character sheet
-  metadata.json           # stats
-```
-
-### 5. Lint wiki
-
-```bash
-python scripts/lint_wiki.py --slug sam
-```
-
-### 6. Query Knowledge Graph
-
-```bash
-python scripts/query_kg.py --slug sam --entity "Tom"
-python scripts/query_kg.py --slug sam --path "Tom" "Alice"
+python scripts/query_kg.py --slug sam --entity "Alex"
+python scripts/query_kg.py --slug sam --path "Sam" "Alex"
 python scripts/query_kg.py --slug sam --stats
-python scripts/query_memory.py --slug sam --query "work projects" --participant "Sam"
 ```
 
-KG extraction combines explicit relationship cues with conservative person NER and bounded
-pronoun coreference. Every generated relationship carries numeric confidence; low-confidence
-candidates are rejected. Evaluate changes against labeled JSONL before rebuilding production:
+`lazo ask` uses the offline extractive provider by default. It sends no data over the network.
+Optional local generation uses `--provider ollama`. Hosted generation requires explicit
+`--provider hosted` plus `LAZOGRAPH_HOSTED_URL`, `LAZOGRAPH_HOSTED_MODEL`, and
+`LAZOGRAPH_HOSTED_API_KEY`; only selected evidence crosses that boundary.
 
-```bash
-python scripts/evaluate_kg_extraction.py --cases tests/fixtures/kg-cases.jsonl
+`query_memory.py` returns ranked evidence, not a generated answer. Participant aliases resolve to canonical names before ChromaDB filtering.
+
+### 5. Add manual context
+
+Separate records with a blank line. Use a prefix to state the intended authority:
+
+```text
+ASSERT: Alex's birthday is March 14.
+
+CONTEXT: Alex mentioned flowers while discussing gifts.
+
+INFERENCE: Alex may prefer tulips.
 ```
 
-Participant aliases are stored in private `participants.json` profiles. Repeated
-name variants can resolve to the same canonical person without mixing authorship.
-After upgrading an existing dataset, add sender metadata to its semantic index:
+`ASSERT`, `FACT`, or `HECHO` creates an explicit user assertion with confidence `1.0`.
+`CONTEXT`, `NOTE`, or unprefixed text remains freeform context with confidence `0.75`.
+`INFERENCE` remains an identified inference with confidence `0.5`.
 
-```bash
-python scripts/ingest.py --slug sam --migrate-vector-metadata --dry-run
-python scripts/ingest.py --slug sam --migrate-vector-metadata
+```powershell
+lazo context "C:\private\context.txt" --slug sam --dry-run
+lazo context "C:\private\context.txt" --slug sam --apply
+lazo ask "When is Alex's birthday?" --about Alex --slug sam
 ```
 
-This path updates metadata only; embeddings remain unchanged. If vector IDs differ
-from authoritative sources, the command stops and requires `--rebuild-vectors`.
-Full vector rebuilds print progress, elapsed time, and ETA after every 128-message batch.
+Each record must name exactly one known participant. Use `--about Alex` when the subject is implicit.
+The preview shows classification, subject, authority, confidence, duplicates, PII flags, and source
+hash without writing. Apply stores normalized evidence and vectors, validates invariants, and rolls
+back newly created artifacts on failure. Repeating the same context leaves the dataset unchanged.
 
-Inspect recoverable source quarantine, preview a restore, then apply it transactionally:
+### 6. Correct generated relationship knowledge
 
-```bash
+Corrections replace one existing relationship with another in the effective graph. Preview is
+mandatory before apply; ambiguous entities, unsupported relationship wording, and missing old
+claims write nothing.
+
+```powershell
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sam --dry-run
+lazo correct "Carlos is Juan's cousin, not his brother" --slug sam --apply
+lazo corrections --slug sam list
+python scripts/query_kg.py --slug sam --entity Carlos
+```
+
+Generated SQLite triples and source backups remain unchanged. Each apply appends an auditable user
+assertion/retraction record under the private dataset. Effective graph reads and `lazo ask` give
+active corrections priority. Rebuilds preserve the ledger. Undo appends a reversal event:
+
+```powershell
+lazo corrections --slug sam undo <claim-id>
+```
+
+### 7. Diagnose and smoke-test
+
+```powershell
+python scripts/diagnose.py --slug sam
+python scripts/diagnose.py --slug sam --json
+python scripts/smoke_test.py --slug sam
+```
+
+`diagnose.py` reports the active knowledge root, dataset path, Git/schema version, message and participant totals, vector count, graph health, wiki health, export health, and cross-layer invariants.
+
+### 8. Export safely
+
+Exports block detected PII by default before creating output:
+
+```powershell
+python scripts/export_training.py --slug sam --output training\sam
+```
+
+Create a shareable redacted export:
+
+```powershell
+python scripts/export_training.py `
+  --slug sam `
+  --output training\sam-redacted `
+  --pii-policy redact
+```
+
+Use `--pii-policy allow` only after explicit review. Redaction covers raw copies, conversations, profile, and probes; original private sources remain unchanged.
+
+Export structure:
+
+```text
+training/
+  raw/
+  conversations.jsonl
+  profile.md
+  metadata.json
+  probes.json
+```
+
+### 9. Run full end-to-end verification
+
+```powershell
+python scripts/e2e_test.py `
+  --source "C:\path\to\whatsapp.txt" `
+  --persona-name "Samantha" `
+  --persona-query "Sam" `
+  --contact-query "Alex" `
+  --stage-timeout 900 `
+  --pii-policy redact
+```
+
+The E2E workflow uses a disposable knowledge root, prints child stages immediately, validates all layers, retries cleanup for briefly locked Windows SQLite files, and removes temporary data. Add exact gates with `--expect-messages`, `--expect-persona-messages`, and `--expect-contact-messages`.
+
+## Recovery and maintenance
+
+Inspect source quarantine:
+
+```powershell
 python scripts/quarantine.py --slug sam list
 python scripts/quarantine.py --slug sam show 20260807T120000Z
 python scripts/quarantine.py --slug sam restore 20260807T120000Z
 python scripts/quarantine.py --slug sam restore 20260807T120000Z --apply
 ```
 
-Applied restoration rebuilds vectors, participant profiles, KG, and counters. Failure restores
-both source location and derived state. Active filename conflicts stop before any write.
+Restoration is a dry run by default. `--apply` restores selected source files, rebuilds all affected derived layers, and rolls everything back on failure.
 
-### 7. Coordinated atomic rebuild
+Metadata-only vector migration avoids re-embedding unchanged documents:
 
-Rebuild vectors, KG, wiki, and run wiki lint under one exclusive dataset lock:
-
-```bash
-python scripts/rebuild_all.py --slug sam --atomic
+```powershell
+python scripts/ingest.py --slug sam --migrate-vector-metadata --dry-run
+python scripts/ingest.py --slug sam --migrate-vector-metadata
 ```
 
-With `--atomic`, affected layers are snapshotted to a private temporary directory and
-restored after any failed stage or keyboard interruption. Omit the flag to keep successful
-partial stages when a later stage fails.
+Evaluate graph extraction changes before rebuilding private data:
 
-The final rebuild stage runs cross-layer smoke tests for canonical aliases, persona/contact
-KG connectivity, participant-filtered semantic search, wiki lint, and complete export pairs.
-Run it independently when needed:
-
-```bash
-python scripts/smoke_test.py --slug sam
+```powershell
+python scripts/evaluate_kg_extraction.py --cases tests\fixtures\kg-cases.jsonl
 ```
 
-### 8. Diagnose persisted state
-
-Inspect every persisted layer without changing data:
-
-```bash
-python scripts/diagnose.py --slug sam
-python scripts/diagnose.py --slug sam --json
-```
-
-The report identifies the active knowledge root and dataset path, Git and dataset schema
-versions, source/message and participant totals, vector and KG counts, wiki lint health,
-latest export health, and cross-layer invariant failures. A critical health failure returns
-a non-zero exit code; stale or not-yet-built derived artifacts remain explicit warnings.
-
-### 9. End-to-end verification
-
-Run the complete workflow in a disposable dataset: initialize, dry-run, ingest,
-rebuild KG, build/lint wiki, query identities, export, validate counts, then remove
-temporary data.
-
-```bash
-python scripts/e2e_test.py \
-  --source ~/whatsapp-export.txt \
-  --persona-name "Samantha" \
-  --persona-query "Sam" \
-  --contact-query "Alex"
-```
-
-Optional exact-count gates: `--expect-messages`, `--expect-persona-messages`, and
-`--expect-contact-messages`. Every child stage uses immediate unbuffered output and a
-900-second default timeout; override it with `--stage-timeout`. Temporary state is removed
-with Windows-safe retries. E2E exports use `--pii-policy redact` by default. Use `--keep-temp`
-only when debugging a failed run.
+See [Operations](docs/OPERATIONS.md) for routine workflows and failure recovery.
 
 ## Supported sources
 
-Three adapters cover all formats:
-
-| Source | Adapter | Auto-detected |
-|--------|---------|---------------|
-| Obsidian vault | `universal` | `.obsidian/` or `*.md` directory |
-| GBrain export | `universal` | Markdown dir with `.raw/` sidecars |
-| `.md` / `.txt` / `.csv` / `.pdf` | `universal` | File extension |
-| `.jsonl` / `.json` | `universal` | File extension |
-| WhatsApp `.txt` | `chat_export` | Timestamp pattern |
-| Telegram `result.json` | `chat_export` | `chats` JSON key |
-| Signal JSON | `chat_export` | `sender`+`body` format |
-| iMessage `.db` | `chat_export` | SQLite tables |
-| X (Twitter) archive | `social` | `data/tweets.js` |
+| Source | Adapter | Detection |
+|---|---|---|
+| Obsidian / Markdown directories | `universal` | `.obsidian/` or `*.md` |
+| GBrain exports | `universal` | Markdown/raw sidecars or JSON memories |
+| Markdown, text, CSV, PDF | `universal` | File extension |
+| JSONL / JSON | `universal` | File extension/schema |
+| WhatsApp text export | `chat_export` | Localized timestamp pattern |
+| Telegram `result.json` | `chat_export` | `chats` schema |
+| Signal JSON | `chat_export` | `sender` + `body` |
+| iMessage SQLite | `chat_export` | `message` + `handle` tables |
+| X/Twitter archive | `social` | `data/tweets.js` |
 | Instagram archive | `social` | `content/posts_1.json` |
 
-## Data storage
+See [Source formats](references/source-formats.md) for details.
 
-```
-~/.openpersona/knowledge/{slug}/
-  dataset.json                # metadata + stats
-  participants.json           # canonical people, roles, aliases, activity ranges
-  .mempalace/                 # MemPalace local data
-    palace/                   # ChromaDB + KG
-  sources/                    # immutable source backups (JSONL)
-    .source-index.json        # per-file metadata
-  wiki/                       # Karpathy wiki (derived from MemPalace)
-    _schema.md
+## Command reference
+
+| Script | Purpose |
+|---|---|
+| `lazo import` | Preview participants, safely initialize, import, and validate one chat |
+| `lazo ask` | Answer about one participant with isolated retrieval and validated citations |
+| `lazo context` | Preview or apply classified manual context with provenance and rollback |
+| `lazo correct` | Preview or apply one relationship replacement through an immutable ledger |
+| `lazo corrections` | List correction history or append a reversible undo event |
+| `init_knowledge.py` | Initialize dataset or print basic stats |
+| `ingest.py` | Parse, deduplicate, store, reconcile, migrate, and rebuild |
+| `query_memory.py` | Participant-filtered semantic retrieval |
+| `query_kg.py` | Entity lookup, shortest path, graph statistics |
+| `build_wiki.py` | Deterministic evidence-backed wiki build |
+| `lint_wiki.py` | Wiki links, evidence, contradiction, and coverage checks |
+| `rebuild_all.py` | Coordinated rebuild with optional atomic rollback |
+| `smoke_test.py` | Cross-layer functional verification |
+| `diagnose.py` | Read-only persisted-state health report |
+| `reconcile_sources.py` | Manual authoritative-source reconciliation |
+| `quarantine.py` | Inspect and transactionally restore quarantined sources |
+| `export_training.py` | Versioned, hashed, PII-governed training export |
+| `evaluate_kg_extraction.py` | Labeled precision/recall/F1 evaluation |
+| `e2e_test.py` | Disposable full-system verification |
+
+## Private data layout
+
+```text
+${OPENPERSONA_KNOWLEDGE}/{slug}/
+  dataset.json
+  participants.json
+  .mempalace/
+    palace/
+      chroma.sqlite3
+      knowledge_graph.sqlite3
+  sources/
+    .source-index.json
+    quarantine/
+  corrections/
+    ledger.jsonl
+  wiki/
     identity.md
     voice.md
     values.md
     thinking.md
-    relationships.md          # KG-generated
-    timeline.md               # KG-generated
+    relationships.md
+    timeline.md
+    _schema.md
     _contradictions.md
     _changelog.md
     _evidence.md
 ```
 
-## Dependency chain
+Private datasets, vector stores, imports, exports, virtual environments, and secrets are excluded by `.gitignore`.
 
-```
-persona-knowledge   →   anyone-skill   →   persona-model-trainer
-(data management)     (distillation)     (fine-tuning)
-```
+## Project status and roadmap
 
-- `persona-knowledge` is optional — `anyone-skill` works standalone
-- When present, `anyone-skill` uses `persona-knowledge` for persistent storage and semantic search
-- `persona-model-trainer` consumes the `training/` export directly
+All defects discovered during the first real WhatsApp end-to-end validation are fixed and retained
+as regression coverage.
+
+Future product work follows the gated [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md). Each slice
+must reach a working demo, receive user feedback, and be explicitly accepted before the next slice
+starts. See [PENDING.md](PENDING.md) for the next active item and completed repair history.
 
 ## License
 

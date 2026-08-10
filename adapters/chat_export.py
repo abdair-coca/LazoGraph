@@ -11,22 +11,41 @@ import sqlite3
 from pathlib import Path
 
 
-def parse(source_path: str, *, persona_name: str = '', since: str | None = None, **kwargs) -> list[dict]:
+def parse(
+    source_path: str,
+    *,
+    persona_name: str = '',
+    persona_exact: bool = False,
+    since: str | None = None,
+    **kwargs,
+) -> list[dict]:
     p = Path(source_path)
 
     if p.suffix == '.db':
         return _parse_imessage(p, persona_name=persona_name)
 
     if p.suffix == '.txt':
-        return _parse_whatsapp(p, persona_name=persona_name)
+        return _parse_whatsapp(
+            p,
+            persona_name=persona_name,
+            persona_exact=persona_exact,
+        )
 
     if p.suffix == '.json':
         data = json.loads(p.read_text(errors='replace'))
         if isinstance(data, dict) and 'chats' in data:
-            return _parse_telegram(data, persona_name=persona_name)
+            return _parse_telegram(
+                data,
+                persona_name=persona_name,
+                persona_exact=persona_exact,
+            )
         if isinstance(data, list):
             if data and 'sender' in data[0]:
-                return _parse_signal(data, persona_name=persona_name)
+                return _parse_signal(
+                    data,
+                    persona_name=persona_name,
+                    persona_exact=persona_exact,
+                )
 
     raise ValueError(f'Unrecognized chat export format: {source_path}')
 
@@ -75,6 +94,21 @@ def is_whatsapp_system_notice(text: str) -> bool:
     return any(normalized.startswith(prefix) for prefix in _WA_SYSTEM_NOTICE_PREFIXES)
 
 
+def count_whatsapp_rejected_notices(path: Path) -> int:
+    """Count timestamped non-message records omitted by the WhatsApp parser."""
+    text = path.read_text(encoding='utf-8-sig', errors='replace')
+    rejected = 0
+    for line in text.splitlines():
+        match = _match_whatsapp_header(line)
+        if not match:
+            continue
+        body = match.group('body')
+        sender, separator, _content = body.partition(':')
+        if is_whatsapp_system_notice(body) or not separator or not sender.strip():
+            rejected += 1
+    return rejected
+
+
 def looks_like_whatsapp(text: str) -> bool:
     """Detect a WhatsApp export without assuming English timestamp spacing."""
     for line in text.splitlines():
@@ -86,7 +120,21 @@ def looks_like_whatsapp(text: str) -> bool:
     return False
 
 
-def _parse_whatsapp(path: Path, *, persona_name: str) -> list[dict]:
+def _is_persona_sender(sender: str, persona_name: str, *, exact: bool) -> bool:
+    """Keep legacy partial matching unless a validated CLI requests exact roles."""
+    sender_key = sender.strip().casefold()
+    persona_key = persona_name.strip().casefold()
+    if not persona_key:
+        return False
+    return sender_key == persona_key if exact else persona_key in sender_key
+
+
+def _parse_whatsapp(
+    path: Path,
+    *,
+    persona_name: str,
+    persona_exact: bool = False,
+) -> list[dict]:
     text = path.read_text(encoding='utf-8-sig', errors='replace')
     messages = []
     persona_lower = persona_name.lower().strip()
@@ -122,7 +170,11 @@ def _parse_whatsapp(path: Path, *, persona_name: str) -> list[dict]:
                 continue
 
             sender = sender.strip()
-            is_persona = bool(persona_lower and persona_lower in sender.lower())
+            is_persona = _is_persona_sender(
+                sender,
+                persona_lower,
+                exact=persona_exact,
+            )
             current = {
                 'role': 'assistant' if is_persona else 'user',
                 'content_lines': [content.strip()],
@@ -185,7 +237,12 @@ def _normalize_wa_ts(raw: str) -> str:
 
 # --- Telegram ---
 
-def _parse_telegram(data: dict, *, persona_name: str) -> list[dict]:
+def _parse_telegram(
+    data: dict,
+    *,
+    persona_name: str,
+    persona_exact: bool = False,
+) -> list[dict]:
     messages = []
     persona_lower = persona_name.lower().strip()
     chat_list = data.get('chats', {}).get('list', [])
@@ -206,7 +263,11 @@ def _parse_telegram(data: dict, *, persona_name: str) -> list[dict]:
             if not text.strip():
                 continue
 
-            is_persona = bool(persona_lower and persona_lower in str(sender).lower())
+            is_persona = _is_persona_sender(
+                str(sender),
+                persona_lower,
+                exact=persona_exact,
+            )
 
             messages.append({
                 'role': 'assistant' if is_persona else 'user',
@@ -222,7 +283,12 @@ def _parse_telegram(data: dict, *, persona_name: str) -> list[dict]:
 
 # --- Signal ---
 
-def _parse_signal(data: list, *, persona_name: str) -> list[dict]:
+def _parse_signal(
+    data: list,
+    *,
+    persona_name: str,
+    persona_exact: bool = False,
+) -> list[dict]:
     messages = []
     persona_lower = persona_name.lower().strip()
 
@@ -240,7 +306,11 @@ def _parse_signal(data: list, *, persona_name: str) -> list[dict]:
             from datetime import datetime
             ts = datetime.fromtimestamp(ts).isoformat()
 
-        is_persona = bool(persona_lower and persona_lower in str(sender).lower())
+        is_persona = _is_persona_sender(
+            str(sender),
+            persona_lower,
+            exact=persona_exact,
+        )
 
         messages.append({
             'role': 'assistant' if is_persona else 'user',
@@ -298,7 +368,11 @@ def _parse_imessage(db_path: Path, *, persona_name: str) -> list[dict]:
             'timestamp': ts,
             'source_file': db_path.name,
             'source_type': 'imessage',
-            'metadata': {'handle': handle_id or '', 'is_from_me': bool(is_from_me)},
+            'metadata': {
+                'sender': persona_name if is_from_me else str(handle_id or ''),
+                'handle': handle_id or '',
+                'is_from_me': bool(is_from_me),
+            },
         })
 
     conn.close()

@@ -111,6 +111,12 @@ Handles formats that require special timestamp parsing or binary database readin
 
 **Parsing**: Splits on timestamp pattern, extracts sender and message. Multi-line messages are concatenated.
 
+Localized formats are supported, including Spanish `a. m.` / `p. m.`, optional seconds,
+Android and iOS bracket layouts, and normal/non-breaking/narrow non-breaking spaces around
+meridiem markers. The ingestion boundary rejects encryption, disappearing-message, and other
+known system notices even when notice text contains a colon. Structurally invalid sender names
+never reach deduplication, vectors, participant profiles, or the Knowledge Graph.
+
 ### Telegram
 
 **Format**: `result.json` exported from Telegram Desktop
@@ -199,7 +205,7 @@ All adapters produce the same internal format:
     "timestamp": str | None,        # ISO 8601 or None
     "source_file": str,             # original file path
     "source_type": str,             # adapter name
-    "metadata": {}                  # adapter-specific extra fields
+    "metadata": {"sender": str}     # canonical source participant + adapter fields
 }
 ```
 
@@ -207,6 +213,10 @@ The `role` assignment:
 - Messages **from** the target persona → `"assistant"`
 - Messages **to** the target persona → `"user"`
 - Monologue / essays / posts → `"assistant"` (the persona speaking)
+
+Chat sender identity is retained independently in `metadata.sender`. Participant profiles use
+that exact evidence to separate people, count authorship, maintain aliases, and filter semantic
+search without role ambiguity.
 
 ## Interop with anyone-skill preprocess.py
 

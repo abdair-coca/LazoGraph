@@ -28,9 +28,20 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from runtime import configure_safe_output
-from kg_extraction import extract_content_facts
-from pii import PII_PATTERNS
+try:
+    from .runtime import configure_safe_output
+    from .kg_extraction import canonical_known_identity, extract_content_facts
+    from .pii import PII_PATTERNS
+    from .dataset_invariants import print_report as print_invariant_report
+    from .dataset_invariants import validate_dataset
+    from .source_reconciliation import quarantine_sources
+except ImportError:
+    from runtime import configure_safe_output
+    from kg_extraction import canonical_known_identity, extract_content_facts
+    from pii import PII_PATTERNS
+    from dataset_invariants import print_report as print_invariant_report
+    from dataset_invariants import validate_dataset
+    from source_reconciliation import quarantine_sources
 
 # Resolve adapters relative to this script's parent directory
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -38,10 +49,6 @@ SKILL_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(SKILL_DIR))
 
 from adapters import detect_adapter
-from dataset_invariants import print_report as print_invariant_report
-from dataset_invariants import validate_dataset
-from source_reconciliation import quarantine_sources
-
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
     Path.home() / '.openpersona' / 'knowledge'
@@ -52,13 +59,18 @@ SOURCE_EQUIVALENCE_MIN_OVERLAP = 0.95
 SOURCE_EQUIVALENCE_MIN_SIZE_RATIO = 0.90
 
 
-def main():
+def main(argv: list[str] | None = None, *, knowledge_root: Path | None = None):
     configure_safe_output()
     parser = argparse.ArgumentParser(description='Ingest data into a persona dataset')
     parser.add_argument('--slug', required=True, help='Persona dataset slug')
     parser.add_argument('--source', help='Path to source file or directory')
     parser.add_argument('--adapter', help='Force specific adapter (universal/chat_export/social)')
     parser.add_argument('--persona-name', default='', help='Persona display name (for role detection)')
+    parser.add_argument(
+        '--persona-exact',
+        action='store_true',
+        help='Match persona sender exactly after participant preflight',
+    )
     parser.add_argument('--since', help='Only ingest data after this date (ISO 8601)')
     parser.add_argument('--entity', help='Entity name for GBrain JSON export')
     parser.add_argument('--dry-run', action='store_true', help='Parse and report without writing')
@@ -90,9 +102,9 @@ def main():
         help='Update persisted vector metadata without recomputing embeddings',
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    dataset_dir = KNOWLEDGE_ROOT / args.slug
+    dataset_dir = (knowledge_root or KNOWLEDGE_ROOT) / args.slug
     if not dataset_dir.exists():
         print(f'❌ Dataset not found: {dataset_dir}', file=sys.stderr)
         print(f'   Run: python scripts/init_knowledge.py --slug {args.slug} --name "..."', file=sys.stderr)
@@ -106,9 +118,10 @@ def main():
         print(f'🔄 Rebuilding Knowledge Graph from {len(messages)} stored messages...')
         cleared = _clear_managed_kg(dataset_dir)
         print(f'   Cleared: {cleared} managed relationships')
-        pruned = _prune_invalid_kg_entities(dataset_dir)
-        print(f'   Pruned: {pruned} invalid orphan entities')
-        _write_participant_profiles(dataset_dir, messages)
+        profiles = _write_participant_profiles(dataset_dir, messages)
+        canonical_names = {profile['name'] for profile in profiles}
+        pruned = _prune_invalid_kg_entities(dataset_dir, canonical_names)
+        print(f'   Pruned: {pruned} invalid or identity-shadow orphan entities')
         kg_stats = _extract_kg_triples(dataset_dir, messages)
         _set_kg_stats(dataset_dir, kg_stats)
         invariants_ok = print_invariant_report(validate_dataset(dataset_dir))
@@ -178,6 +191,7 @@ def main():
 
     parse_kwargs = {
         'persona_name': args.persona_name,
+        'persona_exact': args.persona_exact,
         'since': args.since,
     }
     if args.entity:
@@ -342,6 +356,15 @@ def scan_pii(messages: list[dict]) -> set[str]:
 
 def _content_hash(msg: dict) -> str:
     key = f'{msg["role"]}:{msg["content"]}'
+    if msg.get('source_type') == 'user_context':
+        metadata = msg.get('metadata', {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        key += ':' + ':'.join((
+            str(metadata.get('subject', '')).casefold().strip(),
+            str(metadata.get('record_kind', '')).casefold().strip(),
+            str(metadata.get('authority', '')).casefold().strip(),
+        ))
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
@@ -509,9 +532,10 @@ def _run_equivalent_source_reconciliation(
         show_progress=True,
     )
     cleared_relationships = _clear_managed_kg(dataset_dir)
-    pruned_entities = _prune_invalid_kg_entities(dataset_dir)
+    profiles = _write_participant_profiles(dataset_dir, authoritative_messages)
+    canonical_names = {profile['name'] for profile in profiles}
+    pruned_entities = _prune_invalid_kg_entities(dataset_dir, canonical_names)
     kg_stats = _extract_kg_triples(dataset_dir, authoritative_messages)
-    _write_participant_profiles(dataset_dir, authoritative_messages)
     _replace_stats(dataset_dir, authoritative_messages, kg_stats)
     invariants = validate_dataset(dataset_dir)
     invariants_ok = print_invariant_report(invariants)
@@ -541,7 +565,8 @@ def _run_equivalent_source_reconciliation(
 # --- Sources backup ---
 
 def _write_sources_backup(dataset_dir: Path, messages: list[dict], adapter_name: str,
-                          source_path: str | None, pii_flags: set[str]) -> str:
+                          source_path: str | None, pii_flags: set[str], *,
+                          source_metadata: dict | None = None) -> str:
     sources_dir = dataset_dir / 'sources'
     sources_dir.mkdir(exist_ok=True)
 
@@ -573,7 +598,7 @@ def _write_sources_backup(dataset_dir: Path, messages: list[dict], adapter_name:
     else:
         index = {'files': [], 'last_updated': ''}
 
-    index['files'].append({
+    source_entry = {
         'filename': filename,
         'adapter': adapter_name,
         'source': source_path or adapter_name,
@@ -584,7 +609,10 @@ def _write_sources_backup(dataset_dir: Path, messages: list[dict], adapter_name:
             ''.join(m['content'] for m in messages).encode()
         ).hexdigest()[:16],
         'pii_flags': sorted(pii_flags) if pii_flags else None,
-    })
+    }
+    if source_metadata:
+        source_entry.update(source_metadata)
+    index['files'].append(source_entry)
     index['last_updated'] = datetime.now(timezone.utc).isoformat()
 
     index_path.write_text(json.dumps(index, indent=2, ensure_ascii=False) + '\n')
@@ -717,6 +745,19 @@ def _vector_metadata(slug: str, message: dict) -> dict:
     }
     if message.get('timestamp'):
         metadata['authored_at'] = message['timestamp']
+    for key in (
+        'subject',
+        'authored_by',
+        'record_kind',
+        'authority',
+        'confidence',
+        'source_sha256',
+        'record_number',
+        'imported_at',
+    ):
+        value = message_metadata.get(key)
+        if isinstance(value, (str, int, float, bool)) and value != '':
+            metadata[key] = value
     return metadata
 
 
@@ -1092,22 +1133,32 @@ def _clear_managed_kg(dataset_dir: Path) -> int:
         connection.close()
 
 
-def _prune_invalid_kg_entities(dataset_dir: Path) -> int:
-    """Delete malformed orphan entities left by historical parser failures."""
+def _prune_invalid_kg_entities(
+    dataset_dir: Path,
+    canonical_names: set[str] | None = None,
+) -> int:
+    """Delete malformed or canonical-identity-shadow orphan entities."""
     db_path = dataset_dir / '.mempalace' / 'palace' / 'knowledge_graph.sqlite3'
     if not db_path.exists():
         return 0
     connection = sqlite3.connect(db_path)
     try:
-        cursor = connection.execute(
-            "DELETE FROM entities "
-            "WHERE (length(name) > 120 OR instr(name, char(10)) > 0 "
-            "OR instr(name, char(13)) > 0) "
-            "AND id NOT IN (SELECT subject FROM triples) "
+        rows = connection.execute(
+            "SELECT id, name FROM entities "
+            "WHERE id NOT IN (SELECT subject FROM triples) "
             "AND id NOT IN (SELECT object FROM triples)"
-        )
+        ).fetchall()
+        remove_ids = []
+        for entity_id, name in rows:
+            malformed = len(name) > 120 or '\n' in name or '\r' in name
+            canonical = canonical_known_identity(name, canonical_names or set())
+            identity_shadow = canonical is not None and canonical.casefold() != name.casefold()
+            if malformed or identity_shadow:
+                remove_ids.append((entity_id,))
+        if remove_ids:
+            connection.executemany('DELETE FROM entities WHERE id = ?', remove_ids)
         connection.commit()
-        return max(cursor.rowcount, 0)
+        return len(remove_ids)
     except sqlite3.OperationalError:
         return 0
     finally:

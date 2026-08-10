@@ -1,6 +1,31 @@
 # Pending work
 
-## Optimization backlog from real end-to-end testing
+## Active roadmap
+
+- [x] **Slice 1 — Import Chat: Accepted.** Packaged `lazo import`, participant preview, safe
+  focal-person resolution, confirmation, idempotent reimport, equivalent-source preflight,
+  compatibility wrappers, and final invariant validation passed automated and real-data testing.
+
+- [x] **Slice 2 — Ask About a Person: Accepted.** Participant-isolated semantic retrieval,
+  provider-neutral synthesis, persisted citations, confidence, Spanish output, contradiction
+  handling, and safe abstention passed automated and real-data testing.
+
+- [x] **Slice 3 — Add Manual Context: Accepted.** Preview/apply semantics, classified
+  authority, PII/source-hash reporting, transactional persistence, idempotency, grounded citations,
+  and invariant validation passed automated and end-to-end testing.
+
+- [ ] **Slice 4 — Correct Knowledge: Awaiting Feedback.** Safe bilingual correction previews,
+  immutable assertion/retraction/supersede history, effective graph reads, grounded citations,
+  rebuild persistence, conflict protection, audit listing, and reversible undo passed automated
+  and disposable end-to-end testing. Feedback repair also canonicalizes expanded compound names,
+  prunes historical identity-shadow orphans, and rejects genuinely ambiguous abbreviations. Slice
+  5 remains locked until `Slice 4 accepted`.
+
+The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
+their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.
+No later slice may start until the user writes the exact acceptance phrase for the current slice.
+
+## Completed optimization backlog from real end-to-end testing
 
 - [x] Add a single `diagnose` command that prints the active knowledge root, dataset path,
   Git/schema version, source counts, participant totals, vector counts, KG counts, and
@@ -17,7 +42,7 @@
   being recognized as two representations of the same chat. Ingestion now compares normalized
   content overlap against every active backup and stops before all writes when a large source
   has at least 95% overlap and a similar size. Small sources require an exact match; intentional
-  imports can use `--allow-equivalent-source`. No automatic quarantine is performed yet.
+  imports can use `--allow-equivalent-source`; confirmed replacement uses recoverable quarantine.
 - [x] Add dataset-wide invariants after every write: active-source unique messages must equal
   dataset stats, participant totals, vector count, and export source snapshot. The mismatch
   was only found after KG reconstruction. A shared validator now checks active JSONL backups,

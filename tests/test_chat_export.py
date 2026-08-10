@@ -74,6 +74,17 @@ class TestLocalizedWhatsApp(unittest.TestCase):
         self.assertEqual(len(messages), 1)
         self.assertEqual(messages[0]['metadata']['sender'], 'Abdair')
 
+    def test_exact_persona_mode_does_not_merge_similar_names(self):
+        self.write_chat(
+            '13/8/25, 9:39 p. m. - Sam: Message one\n'
+            '13/8/25, 9:40 p. m. - Samantha: Message two\n'
+        )
+
+        messages = parse(str(self.path), persona_name='Sam', persona_exact=True)
+
+        self.assertEqual(messages[0]['role'], 'assistant')
+        self.assertEqual(messages[1]['role'], 'user')
+
 
 if __name__ == '__main__':
     unittest.main()

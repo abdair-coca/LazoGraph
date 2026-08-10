@@ -1,4 +1,85 @@
-# Changelog — persona-knowledge
+# Changelog — LazoGraph
+
+## [Unreleased]
+
+### Added
+
+- Packaged `lazo` entry point and Slice 1 `lazo import` command.
+- Non-mutating participant preview with exact focal-person resolution, counts, PII flags,
+  duplicates, rejected system notices, and equivalent-source warnings.
+- Automatic dataset initialization after confirmation plus final invariant validation.
+- Localized generic import fixture and Slice 1 CLI/integration regression coverage.
+- Slice 2 `lazo ask` with participant-filtered retrieval, persisted Evidence citations, Answer
+  contracts, confidence, safe debug summaries, and Spanish responses.
+- Provider-neutral `LLMProvider` implementations: offline extractive default, local Ollama, and an
+  explicitly configured evidence-only hosted boundary.
+- Abstention for missing, weak, contradictory, or topic-mismatched evidence.
+- Slice 3 `lazo context` with dry-run/apply semantics, explicit assertion/freeform/inference
+  classification, subject resolution, source hashes, authorship, authority, and confidence.
+- Transactional manual-context persistence across source backup, Chroma vectors, participant
+  profiles, dataset counters, and invariants, including failure rollback and idempotent reapply.
+- Manual-context citations in Slice 2 with provider-safe provenance and correct non-speaker wording.
+- Slice 4 `lazo correct` bilingual relationship replacement with non-mutating dry-run, strict
+  entity resolution, PII reporting, and stale-preview conflict protection.
+- Private append-only correction ledger with assertion/retraction/supersede records, audit listing,
+  idempotent apply, rebuild-safe effective graph projection, and reversible undo events.
+- Correction-backed answer evidence with participant isolation, user authority, and distinct
+  provenance from extracted messages and manual context.
+
+### Changed
+
+- Existing adapters and ingestion remain the implementation boundary; `scripts/*.py` commands stay
+  compatible.
+- Reimporting the same source exits successfully without changing persisted data.
+- Semantic hits must pass canonical sender and persisted-source validation before generation.
+- Manual context import time is audit metadata rather than an event timestamp, preserving chat
+  chronology.
+- Graph queries, diagnosis, smoke tests, and grounded answers read the effective graph while the
+  generated SQLite graph remains an unchanged rebuildable base layer.
+
+### Fixed
+
+- Exact CLI persona roles no longer merge similarly named participants.
+- `init_knowledge.py --stats` no longer crashes on legacy Windows console code pages.
+- Expanded compound names that contain one known participant no longer create truncated orphan
+  entities. KG rebuild removes historical identity shadows, unique participant prefixes resolve to
+  the canonical profile, and genuinely ambiguous abbreviations fail explicitly.
+
+## [0.3.0] — 2026-08-07
+
+### Added
+
+- Localized Spanish WhatsApp parsing, multiline preservation, and system-notice rejection.
+- Canonical persona/contact profiles with aliases and participant-filtered semantic search.
+- Equivalent-source detection, recoverable reconciliation, quarantine inspection, and transactional restoration.
+- Dataset-wide source/profile/vector/export consistency invariants.
+- Vector metadata-only migration plus rebuild progress and ETA.
+- Atomic vector/KG/wiki rebuild with exclusive lock and rollback.
+- Read-only dataset diagnosis and five cross-layer functional smoke tests.
+- Deterministic evidence-backed six-page wiki builder.
+- Conservative person NER, bounded coreference, numeric relationship confidence, and labeled extraction evaluation.
+- PII export policies: default block, deterministic redaction, and explicit allow.
+- Windows-safe E2E output, configurable stage timeouts, and retrying temporary cleanup.
+- Authentic alternating dialogue export without invented prompts.
+
+### Changed
+
+- Project product name is now LazoGraph; the compatible skill/package identifier remains `persona-knowledge`.
+- Knowledge Graph access uses the current `db_path` API and persisted SQLite state.
+- Private dataset storage is explicitly separated from the Git checkout.
+- Wiki generation is now deterministic and script-driven; human or agent review remains optional.
+
+### Fixed
+
+- Duplicate normalized/direct chat backups no longer inflate datasets.
+- Stale vectors are pruned after authoritative source changes.
+- Malformed WhatsApp notices cannot become participants or orphan graph entities.
+- Semantic participant filters resolve canonical sender metadata correctly.
+- Windows legacy console code pages no longer crash CLI output.
+
+### Current limitation
+
+- Semantic and graph queries return evidence; conversational RAG answer synthesis is not implemented yet.
 
 ## [0.2.0] — 2026-04-11
 

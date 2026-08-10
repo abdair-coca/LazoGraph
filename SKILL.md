@@ -1,356 +1,285 @@
 ---
 name: persona-knowledge
-description: "Persistent, incremental, searchable persona knowledge base. Ingests data from Obsidian vaults, chat exports, X/Twitter archives, and more into a MemPalace-backed store with a Karpathy LLM Wiki knowledge layer. Exports training/ directories for persona-model-trainer."
+description: "Operate LazoGraph: a local-first personal knowledge graph with semantic memory, participant identity, evidence wiki, recovery workflows, and PII-safe exports."
 license: MIT
-compatibility: "Designed for Claude Code, Cursor, or OpenClaw. Requires Python 3.11+ and mempalace >= 3.1.0."
-allowed-tools: Read Write Bash WebSearch
+compatibility: "Python 3.11+ and mempalace >= 3.1.0. Windows, macOS, and Linux."
+allowed-tools: Read Write Bash
 metadata:
-  version: "0.2.2"
-  author: acnlabs
-  requires: "python >= 3.11, mempalace >= 3.1.0 (pip install mempalace)"
-  optional: "anyone-skill (distillation integration), persona-model-trainer (consumes training/ export)"
+  version: "0.7.0"
+  project: LazoGraph
+  upstream: acnlabs/persona-knowledge
+  requires: "python >= 3.11, mempalace >= 3.1.0"
 ---
 
-# persona-knowledge
+# LazoGraph operator skill
 
-Persistent, incremental, searchable persona knowledge base — the **data layer** between raw sources and persona training.
+Use this skill when the user wants to create, ingest, inspect, query, rebuild, repair, verify, or export a persistent personal knowledge dataset.
 
-**Architecture**: MemPalace (storage + search) + Knowledge Graph (relationships + timeline) + Karpathy LLM Wiki (knowledge accumulation)
+Do not use it for one-shot summarization with no persistent dataset. Do not place private source data inside the Git repository.
 
-**Dependency chain**: `data sources` → `persona-knowledge` → `anyone-skill` / `persona-model-trainer`
+## Safety rules
 
----
+1. Set `OPENPERSONA_KNOWLEDGE` to a private directory outside the repository.
+2. Run ingestion with `--dry-run` before the first write from any source format.
+3. Confirm parsed counts, roles, participant names, and PII flags.
+4. Never merge equivalent backups blindly. Use reconciliation/quarantine workflows.
+5. Prefer `rebuild_all.py --atomic` for coordinated derived-state changes.
+6. Run `diagnose.py` and `smoke_test.py` after repairs.
+7. Export uses PII `block` by default. Prefer `redact` for shareable artifacts.
+8. Never commit dataset files, vectors, source backups, exports, or secrets.
 
-## When to use this skill
+## Environment
 
-Trigger phrases:
+Windows PowerShell:
 
-- "create a dataset for this persona"
-- "add data to the dataset"
-- "import my Obsidian vault"
-- "import my Twitter archive"
-- "build a knowledge base for X"
-- "export training data"
-- "search the persona dataset"
+```powershell
+$env:PYTHONUTF8='1'
+$env:OPENPERSONA_KNOWLEDGE="$env:LOCALAPPDATA\LazoGraph\knowledge"
+```
 
-**Not suitable when:**
-
-- User wants a quick one-shot distillation without persistent storage (use anyone-skill alone)
-- User only has < 50 messages of data (too little to warrant a dataset)
-
----
-
-## Phase 1: Init
-
-Create a new persona dataset:
+macOS/Linux:
 
 ```bash
-python scripts/init_knowledge.py --slug {slug} --name "Display Name"
+export PYTHONUTF8=1
+export OPENPERSONA_KNOWLEDGE="$HOME/.local/share/LazoGraph/knowledge"
 ```
 
-This creates `~/.openpersona/knowledge/{slug}/` with:
-
-```
-~/.openpersona/knowledge/{slug}/
-  dataset.json                 # metadata: slug, name, created_at, stats
-  .mempalace/                  # MemPalace local data (per-dataset isolation via palace_path)
-    palace/                    # MemPalace internal store (ChromaDB + KG)
-  sources/                     # immutable source file backups
-    .source-index.json         # per-file metadata: hash, import time, line count, PII flags
-  wiki/                        # Karpathy wiki (LLM-maintained derived artifact)
-    _schema.md                 # wiki maintenance rules
-    identity.md
-    voice.md
-    values.md
-    thinking.md
-    relationships.md           # generated from Knowledge Graph
-    timeline.md                # generated from Knowledge Graph
-    _contradictions.md
-    _changelog.md
-    _evidence.md
-```
-
-MemPalace palace structure:
-- One Wing per persona (named by slug)
-- Halls mapped to 5 persona dimensions:
-  - `hall_facts` — Identity (background, career, education)
-  - `hall_events` — Memory (key events, turning points)
-  - `hall_preferences` — Personality (values, preferences, boundaries)
-  - `hall_discoveries` — Procedure (mental models, decision heuristics)
-  - `hall_voice` — Interaction (vocabulary, rhythm, humor, emotional temperature)
-
-**Gate**: Confirm slug and display name with the user before proceeding.
-
----
-
-## Phase 2: Ingest
-
-Import data sources into the dataset. Can be called multiple times for incremental ingestion.
+## Phase 1: preview and import
 
 ```bash
-python scripts/ingest.py --slug {slug} --source <path> [--adapter <name>] [--since <date>]
+lazo import <path> --slug {slug} --persona "Display Name" --dry-run
+lazo import <path> --slug {slug} --persona "Display Name"
 ```
 
-**Three adapters** cover all supported formats:
+First command never writes. Second repeats preflight, asks for confirmation, initializes a missing
+dataset, imports every storage layer, and validates invariants. Reimporting the same source must
+report zero new messages without changing data.
 
-| Source | Adapter | Detection |
-|--------|---------|-----------|
-| Obsidian vault | `universal` | Directory containing `.obsidian/` or `*.md` files |
-| GBrain export dir | `universal` | Markdown directory with `.raw/` sidecar dirs |
-| `.md` / `.txt` / `.csv` / `.pdf` | `universal` | File extension |
-| `.jsonl` / `.json` | `universal` | File extension |
-| GBrain JSON export | `universal` | `.json` with `memories` key or `--entity` flag |
-| WhatsApp `.txt` export | `chat_export` | Matches WhatsApp timestamp pattern |
-| Telegram `result.json` | `chat_export` | JSON with `chats` key |
-| Signal export | `chat_export` | JSON with Signal message format |
-| iMessage `.db` | `chat_export` | SQLite with `message` + `handle` tables |
-| X (Twitter) archive | `social` | Directory containing `data/tweets.js` |
-| Instagram archive | `social` | Directory containing `content/posts_1.json` |
+## Legacy or advanced ingestion
 
-
-**Ingest pipeline** (per source):
-
-1. **Parse** — adapter converts source to unified `[{role, content, timestamp, source_file, source_type}]`
-2. **PII scan** — flag SSN, credit card, email, password patterns
-3. **Hash dedup** — SHA-256 content hash, skip already-ingested entries
-4. **Write sources/** — save parsed data as JSONL backup (immutable, one file per source)
-5. **Store in MemPalace** — verbatim text into ChromaDB via palace wing/hall structure
-6. **Extract KG triples** — detect entities and relationships, write to Knowledge Graph with temporal validity
-7. **Report** — print source name, message count, assistant turns, PII flags, new KG entities
-
-After each source is ingested, report:
-
-```
-✅ whatsapp-2024.txt → 1,247 messages (892 assistant turns)
-   PII: none detected
-   KG: +3 entities, +7 relationships
-   → sources/whatsapp-2024.jsonl
-```
-
----
-
-## Phase 3: Wiki Build (agent task — not a script)
-
-After ingesting new data, the agent reads MemPalace content and Knowledge Graph relationships, then builds or updates the wiki pages following the Karpathy LLM Wiki pattern.
-
-> This phase is driven by agent intelligence (SKILL.md instructions), not by automated scripts. The LLM decides which pages to update, how to phrase entries, and how to tag evidence.
-
-### Ingest operation (after each Phase 2 run)
-
-1. Read new data from MemPalace (search the wing for recently added entries)
-2. For each relevant wiki page, check if the new data adds, contradicts, or refines existing content
-3. Update 5-15 wiki pages with new information, using evidence tags:
-   - `[L1:source]` — direct quote, traceable
-   - `[L2]` — reported/paraphrased, verifiable
-   - `[L3:inferred]` — reasonably inferred from multiple signals
-   - `[L4:inspired]` — impression-based
-4. Add backlinks between related pages using `[[page]]` wikilink syntax
-5. Record contradictions in `_contradictions.md` with both sides cited
-6. Append entry to `_changelog.md`
-7. Update counts in `_evidence.md`
-
-### Query operation
-
-When the user asks a question about the persona:
-
-1. Search MemPalace semantically for relevant memories
-2. Navigate wiki pages for structured knowledge
-3. Synthesize an answer
-4. If the query reveals new insights, write them back to the appropriate wiki page
-
-### Lint operation
-
-Run periodically or before export:
+Existing scripts remain supported:
 
 ```bash
+python scripts/ingest.py \
+  --slug {slug} \
+  --source <path> \
+  --persona-name "Display Name" \
+  --dry-run
+```
+
+Then ingest only after validating output:
+
+```bash
+python scripts/ingest.py \
+  --slug {slug} \
+  --source <path> \
+  --persona-name "Display Name"
+```
+
+Pipeline:
+
+1. Detect or force adapter.
+2. Parse into normalized role/content/timestamp/sender messages.
+3. Reject malformed chat system notices at the shared boundary.
+4. Scan PII.
+5. detect equivalent source backups before writes.
+6. Deduplicate content.
+7. Persist vectors with canonical participant metadata.
+8. Write immutable normalized JSONL backup.
+9. Build participant profiles and aliases.
+10. Extract graph entities/relationships with numeric confidence.
+11. Validate dataset-wide invariants.
+
+## Phase 2: ask about one participant
+
+```bash
+lazo ask "What does Alex like?" --about Alex --slug {slug}
+```
+
+Default `local` provider stays offline. Results contain persisted message citations and abstain when
+evidence is weak, contradictory, or unavailable. `--provider ollama` enables local generation.
+`--provider hosted` requires explicit endpoint/model/key configuration and sends only selected
+evidence. Never use an unfiltered retrieval result to answer about a named participant.
+
+## Phase 3: add manual context
+
+```bash
+lazo context <context.txt> --slug {slug} --dry-run
+lazo context <context.txt> --slug {slug} --apply
+```
+
+Separate records with blank lines. Prefix explicit assertions with `ASSERT:`, freeform notes with
+`CONTEXT:`, and user-declared inferences with `INFERENCE:`. Unprefixed text remains freeform. Every
+record must resolve to exactly one known participant; use `--about` for an implicit subject.
+
+Review subject, kind, authority, confidence, duplicates, PII flags, and source hash before apply.
+Explicit assertions alone receive confidence `1.0`. Apply persists normalized `user_context`
+evidence and vectors, validates invariants, and rolls back new artifacts on failure. Repeat apply
+to verify it reports no changes. Manual context is searchable and citable through `lazo ask`.
+
+If an equivalent source exists, stop by default. Use:
+
+```bash
+python scripts/ingest.py ... --reconcile-equivalent-source
+```
+
+This quarantines equivalent active backups recoverably, stores the incoming authoritative replacement, and rebuilds all affected derived layers.
+
+## Phase 4: correct relationship knowledge
+
+Preview an exact relationship replacement first:
+
+```bash
+lazo correct "Carlos is Juan's cousin, not his brother" --slug {slug} --dry-run
+lazo correct "Carlos no es hermano de Juan, es su primo" --slug {slug} --dry-run
+```
+
+Confirm the resolved entities, old claim, retraction, assertion, PII flags, and fingerprint. Apply
+only if the statement represents the dataset owner's intended truth:
+
+```bash
+lazo correct "Carlos is Juan's cousin, not his brother" --slug {slug} --apply
+lazo corrections --slug {slug} list
+python scripts/query_kg.py --slug {slug} --entity Carlos
+```
+
+Corrections append to a private immutable ledger and override generated triples only in effective
+reads. Rebuilds preserve them. Repeating an active correction is a no-op; ambiguity, missing old
+claims, stale previews, locks, and corrupt ledger state fail without writes. Undo is append-only:
+
+```bash
+lazo corrections --slug {slug} undo <claim-id>
+```
+
+## Phase 5: rebuild and verify
+
+Preferred coordinated path:
+
+```bash
+python scripts/rebuild_all.py --slug {slug} --atomic
+```
+
+Stages:
+
+1. Vector rebuild with batch progress and ETA.
+2. Managed graph rebuild.
+3. Deterministic wiki build.
+4. Wiki lint.
+5. Functional smoke tests.
+
+Atomic mode acquires an exclusive dataset lock and restores prior vector, graph, participant, metadata, and wiki state after any failure or interruption.
+
+Individual maintenance commands:
+
+```bash
+python scripts/ingest.py --slug {slug} --rebuild-vectors
+python scripts/ingest.py --slug {slug} --rebuild-kg
+python scripts/build_wiki.py --slug {slug} --dry-run
+python scripts/build_wiki.py --slug {slug}
 python scripts/lint_wiki.py --slug {slug}
 ```
 
-Checks:
-- Broken `[[links]]` (referenced page doesn't exist)
-- Empty pages (created but never populated)
-- Contradictions without resolution notes
-- Evidence coverage (pages with < 2 evidence tags)
-- Source coverage (MemPalace entries not reflected in any wiki page)
+## Phase 6: retrieve knowledge
 
-### Wiki page structure (see `references/wiki-schema.md` for full spec)
-
-Each page follows this template:
-
-```markdown
-# {Page Title}
-
-> One-sentence summary of this page's scope.
-
-## Content
-
-{Structured content with [L?:source] evidence tags and [[backlinks]]}
-
-## Sources
-
-- {source_file}: {what was extracted} [L?]
-
-## See also
-
-- [[related_page]]
-```
-
-### Knowledge Graph–driven pages
-
-`relationships.md` and `timeline.md` are generated from the Knowledge Graph, not written freehand:
-
-```python
-from mempalace.knowledge_graph import KnowledgeGraph
-kg = KnowledgeGraph(palace_path)
-kg.timeline(slug)           # → chronological event list for timeline.md
-kg.query_entity(slug)       # → current relationships for relationships.md
-```
-
-After generating, the agent may annotate with evidence tags and additional context.
-
----
-
-## Phase 4: Export
-
-Generate a `training/` directory compatible with persona-model-trainer:
+Semantic evidence:
 
 ```bash
-python scripts/export_training.py --slug {slug} --output training/
+python scripts/query_memory.py \
+  --slug {slug} \
+  --query "natural language query" \
+  --participant "canonical name or alias" \
+  --limit 5
 ```
 
-Each export is automatically versioned (`v1`, `v2`, …). Override with `--version`:
+Graph:
 
 ```bash
-python scripts/export_training.py --slug {slug} --output training/ --version v3
+python scripts/query_kg.py --slug {slug} --entity "Name"
+python scripts/query_kg.py --slug {slug} --path "Name A" "Name B"
+python scripts/query_kg.py --slug {slug} --stats
 ```
 
-List export history:
+`query_kg.py` reads the effective graph, including active user corrections. `query_memory.py`
+returns evidence rather than generated prose; use `lazo ask` for grounded person answers.
+
+## Phase 7: diagnose
 
 ```bash
-python scripts/export_training.py --slug {slug} --list
-# v1  2026-04-01 10:00  142 turns  sha256:a3f9c2d1  3 sources
-# v2  2026-04-10 14:22  198 turns  sha256:c7d2e1f3  4 sources
+python scripts/diagnose.py --slug {slug}
+python scripts/diagnose.py --slug {slug} --json
+python scripts/smoke_test.py --slug {slug}
 ```
+
+Healthy completion requires matching source/message/profile/vector counts, readable graph, valid wiki, and five passing functional smoke probes.
+
+## Phase 8: recover sources
+
+```bash
+python scripts/quarantine.py --slug {slug} list
+python scripts/quarantine.py --slug {slug} show <batch>
+python scripts/quarantine.py --slug {slug} restore <batch>
+python scripts/quarantine.py --slug {slug} restore <batch> --apply
+```
+
+Restore is a plan unless `--apply` is supplied. Apply refuses active filename conflicts, restores source-index metadata, rebuilds affected layers, and rolls back source plus derived state after failure.
+
+## Phase 9: export
+
+Default PII block:
+
+```bash
+python scripts/export_training.py --slug {slug} --output training/{slug}
+```
+
+Recommended shareable export:
+
+```bash
+python scripts/export_training.py \
+  --slug {slug} \
+  --output training/{slug}-redacted \
+  --pii-policy redact
+```
+
+`allow` must be explicit. Metadata records policy, detected types, replacement totals, version, conversation hash, and source snapshot without exposing local dataset paths.
 
 Output:
 
+```text
+raw/
+conversations.jsonl
+profile.md
+metadata.json
+probes.json
 ```
-training/
-  raw/                      # copied from sources/ (authentic voice, unmodified)
-  conversations.jsonl       # generated from wiki pages (structured Q-A pairs)
-  profile.md                # summarized from wiki identity/voice/values
-  metadata.json             # slug, source count, turn count, export version + hash
-```
 
-**How each file is built:**
-
-- `training/raw/` — direct copy of `sources/*.jsonl` and `sources/*.txt` files
-- `training/conversations.jsonl` — the agent reads wiki pages and generates distilled user/assistant turn pairs representing the persona's voice, knowledge, and values
-- `training/profile.md` — 300-500 word character sheet derived from `identity.md`, `voice.md`, `values.md`
-- `training/metadata.json` — `slug`, `name`, `subject_type`, `created_at`, `source_count`, `total_words`, `distilled_turns`, `raw_files` + versioning fields:
-  - `export_version` — version tag (e.g. `"v2"`)
-  - `export_hash` — SHA-256 of `conversations.jsonl` (e.g. `"sha256:c7d2e1f3..."`)
-  - `source_snapshot` — `{filename: sha256_hash}` dict of all source files at export time
-
-Export history is appended to `dataset.json` → `export_history[]` after each run.
-
-**Downstream traceability:** `persona-model-trainer`'s `pipeline.sh` reads `export_version` and `export_hash` from `metadata.json` and injects them as `dataset_version` / `dataset_export_hash` into `training_summary.json`, forming a complete provenance chain from source data to trained model adapter.
-
-This output is directly consumable by `persona-model-trainer`'s `prepare_data.py` — no changes needed downstream.
-
-**→ Next step — train a local persona model:**
+## Phase 10: end-to-end test
 
 ```bash
-bash skills/persona-model-trainer/scripts/pipeline.sh \
-  --slug {slug} \
-  --model google/gemma-4-E4B-it \
-  --source ./training \
-  --method mlx \       # or: unsloth (NVIDIA GPU) / colab (no GPU)
-  --preset gemma4 \
-  --probes ./training/probes.json
+python scripts/e2e_test.py \
+  --source <raw-export> \
+  --persona-name "Display Name" \
+  --persona-query "Persona alias" \
+  --contact-query "Contact alias" \
+  --stage-timeout 900 \
+  --pii-policy redact
 ```
 
-> Full guide: [`persona-model-trainer/references/pipeline-guide.md`](../persona-model-trainer/references/pipeline-guide.md)
+The test creates a disposable root, runs the complete workflow, validates exact-count gates when supplied, streams unbuffered child logs, and removes temporary state with Windows-safe retries.
 
----
+## Supported formats
 
-## Phase 5: Search
+See `references/source-formats.md`. Adapters:
 
-Query the dataset using MemPalace's semantic search and Knowledge Graph:
+- `universal`: Markdown, text, CSV, PDF, JSON/JSONL, Obsidian, GBrain.
+- `chat_export`: localized WhatsApp, Telegram, Signal, iMessage.
+- `social`: X/Twitter and Instagram archives.
+
+## Graph extraction changes
+
+Before modifying extraction rules:
 
 ```bash
-# Semantic search across all stored memories
-mempalace search "how does this person handle conflict" --wing {slug}
-
-# Knowledge Graph: look up an entity's relationships
-python scripts/query_kg.py --slug {slug} --entity "Tom"
-
-# Knowledge Graph: shortest path between two entities
-python scripts/query_kg.py --slug {slug} --path "Tom" "Alice"
-
-# Knowledge Graph: overall statistics
-python scripts/query_kg.py --slug {slug} --stats
-
-# Knowledge Graph: JSON output (for programmatic use)
-python scripts/query_kg.py --slug {slug} --entity "Tom" --json
-
-# Wake-up summary (~170 tokens)
-mempalace wake-up --wing {slug}
+python scripts/evaluate_kg_extraction.py --cases tests/fixtures/kg-cases.jsonl
 ```
 
-The agent can also search programmatically during wiki build or distillation:
-
-```python
-from mempalace.searcher import search_memories
-results = search_memories("vocabulary patterns", palace_path="~/.openpersona/knowledge/{slug}/.mempalace/palace")
-```
-
----
-
-## Phase 6: Maintain
-
-Ongoing dataset management:
-
-- **Add new source**: run Phase 2 (Ingest) again with new files → triggers wiki update
-- **Remove source**: delete from `sources/` + re-index → run wiki lint to flag orphaned content
-- **Wiki lint**: `python scripts/lint_wiki.py --slug {slug}` — health check
-- **Dataset stats**: `python scripts/init_knowledge.py --slug {slug} --stats` — show current stats
-- **List datasets**: `ls ~/.openpersona/knowledge/` — all available datasets
-
----
-
-## Tools
-
-| Tool | Purpose |
-|------|---------|
-| `Bash` | Run init, ingest, export, lint scripts; MemPalace CLI commands |
-| `Read` | Load source files, wiki pages, dataset.json |
-| `Write` | Update wiki pages, write training exports |
-| `WebSearch` | Fetch public figure data for ingestion |
-
----
-
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/init_knowledge.py` | Initialize knowledge directory + MemPalace wing + KG |
-| `scripts/ingest.py` | Unified ingestion: adapter dispatch + PII scan + dedup + MemPalace + KG |
-| `scripts/export_training.py` | Export sources/ + wiki → training/ directory |
-| `scripts/lint_wiki.py` | Wiki health check: broken links, contradictions, coverage gaps |
-| `scripts/query_kg.py` | Knowledge Graph query: entity lookup, shortest path, statistics |
-
-## Adapters
-
-| Adapter | Sources | Format |
-|---------|---------|--------|
-| `universal` | Obsidian vault, GBrain export, .md, .txt, .csv, .pdf, .jsonl, .json | All pure file reading |
-| `chat_export` | WhatsApp / Telegram / Signal / iMessage | .txt / JSON / SQLite (special parsing) |
-| `social` | X (Twitter) / Instagram archive | JS wrapper stripping + archive dirs |
-
----
-
-## References
-
-- `references/wiki-schema.md` — Karpathy wiki structure specification and maintenance rules
-- `references/source-formats.md` — supported data source formats and adapter details
+Extraction is deterministic and conservative: known identities, contextual/multiword person NER, bounded two-message pronoun coreference, stop-token rejection, and a numeric confidence floor.

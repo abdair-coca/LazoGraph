@@ -6,7 +6,9 @@ from collections import Counter
 
 MIN_CONFIDENCE = 0.80
 NAME_TOKEN = r'[A-ZÁÉÍÓÚÑÜ][a-záéíóúñü]+'
-PERSON_NAME = rf'{NAME_TOKEN}(?:\s+{NAME_TOKEN}){{0,2}}'
+# Capture complete Hispanic and compound names before validation. Unknown names remain limited to
+# three tokens by valid_person_name; longer runs are accepted only when they map to a known identity.
+PERSON_NAME = rf'{NAME_TOKEN}(?:\s+{NAME_TOKEN}){{0,5}}'
 
 INVALID_NAME_TOKENS = {
     'ahora', 'ayer', 'buenas', 'buenos', 'chat', 'después', 'domingo', 'ella',
@@ -39,7 +41,27 @@ COREFERENCE_RELATIONSHIPS = (
     (re.compile(r'\b(?:ella|él|she|he)\s+(?:es|is)\s+(?:mi|my)\s+(?:pareja|partner)\b', re.IGNORECASE), 'partner_of'),
 )
 
-MULTIWORD_NAME = re.compile(rf'\b(?P<name>{NAME_TOKEN}\s+{NAME_TOKEN}(?:\s+{NAME_TOKEN})?)\b')
+MULTIWORD_NAME = re.compile(rf'\b(?P<name>{NAME_TOKEN}(?:\s+{NAME_TOKEN}){{1,5}})\b')
+
+
+def canonical_known_identity(name: str, known_names: set[str]) -> str | None:
+    """Map an expanded full-name mention to one unambiguous known identity."""
+    candidate_tokens = name.casefold().split()
+    matches = []
+    for known_name in known_names:
+        known_tokens = known_name.casefold().split()
+        position = 0
+        for token in candidate_tokens:
+            if position < len(known_tokens) and token == known_tokens[position]:
+                position += 1
+        if position == len(known_tokens):
+            matches.append(known_name)
+
+    if not matches:
+        return None
+    longest = max(len(item.split()) for item in matches)
+    strongest = [item for item in matches if len(item.split()) == longest]
+    return strongest[0] if len(strongest) == 1 else None
 
 
 def valid_person_name(name: str, known_names: set[str] | None = None) -> bool:
@@ -85,7 +107,8 @@ def extract_message_facts(
 
     for pattern, relationship_type in EXPLICIT_RELATIONSHIPS:
         for match in pattern.finditer(content):
-            name = match.group('name')
+            raw_name = match.group('name')
+            name = canonical_known_identity(raw_name, known_names) or raw_name
             mention(name, 0.96, 'explicit-relationship')
             if valid_person_name(name, known_names):
                 relationships.append({
@@ -98,13 +121,20 @@ def extract_message_facts(
 
     for pattern in CONTEXT_MENTIONS:
         for match in pattern.finditer(content):
-            mention(match.group('name'), 0.90, 'context-ner')
+            raw_name = match.group('name')
+            name = canonical_known_identity(raw_name, known_names) or raw_name
+            mention(name, 0.90, 'context-ner')
 
     for match in MULTIWORD_NAME.finditer(content):
+        raw_name = match.group('name')
+        canonical = canonical_known_identity(raw_name, known_names)
+        if canonical:
+            mention(canonical, 0.99, 'known-identity-expanded')
+            continue
         start = match.start('name')
         if start == 0 or content[max(0, start - 2):start].endswith(('. ', '! ', '? ')):
             continue
-        mention(match.group('name'), 0.82, 'multiword-ner')
+        mention(raw_name, 0.82, 'multiword-ner')
 
     if recent_entity and valid_person_name(recent_entity, known_names):
         for pattern, relationship_type in COREFERENCE_RELATIONSHIPS:

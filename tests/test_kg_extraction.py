@@ -31,6 +31,44 @@ class TestKGExtraction(unittest.TestCase):
 
         self.assertEqual(facts['mentions'], [])
 
+    def test_expanded_full_name_maps_to_known_identity_without_partial_entity(self):
+        facts = kg_extraction.extract_message_facts(
+            'Me voy a crear una cuenta, Abdair Alison Coca Espinoza',
+            sender='Abdair Coca',
+            known_names={'Abdair Coca', 'Alizon'},
+        )
+
+        self.assertEqual(
+            [(item['name'], item['method']) for item in facts['mentions']],
+            [('Abdair Coca', 'known-identity-expanded')],
+        )
+        self.assertNotIn('Abdair Alison Coca', {item['name'] for item in facts['mentions']})
+
+    def test_long_unknown_name_is_rejected_whole_instead_of_truncated(self):
+        facts = kg_extraction.extract_message_facts(
+            'La cuenta dice Carlos Alberto Pérez Gómez',
+            sender='Sam',
+            known_names=set(),
+        )
+
+        self.assertEqual(facts['mentions'], [])
+        self.assertIn('Carlos Alberto Pérez Gómez', {item['name'] for item in facts['rejected']})
+
+    def test_explicit_relationship_uses_canonical_expanded_identity(self):
+        facts = kg_extraction.extract_message_facts(
+            'Mi amigo Abdair Alison Coca Espinoza llegó.',
+            sender='Alizon',
+            known_names={'Abdair Coca', 'Alizon'},
+        )
+
+        self.assertIn(
+            ('Abdair Coca', 'Alizon', 'friend_of'),
+            {
+                (item['from'], item['to'], item['type'])
+                for item in facts['relationships']
+            },
+        )
+
     def test_bounded_coreference_uses_recent_unambiguous_person(self):
         messages = [
             {'role': 'assistant', 'content': 'Hablé con Carla.', 'metadata': {'sender': 'Sam'}},

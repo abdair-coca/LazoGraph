@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lazograph"
+version = "0.7.0"
+description = "Local-first personal knowledge graph built from private life data"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "mempalace>=3.1.0",
+]
+
+[project.scripts]
+lazo = "lazograph.cli:main"
+
+[tool.setuptools]
+packages = [
+  "adapters",
+  "scripts",
+  "lazograph",
+  "lazograph.features",
+  "lazograph.features.import_chat",
+  "lazograph.features.ask_person",
+  "lazograph.features.add_context",
+  "lazograph.features.correct_knowledge",
+  "lazograph.domain",
+  "lazograph.ports",
+  "lazograph.infrastructure",
+  "lazograph.infrastructure.llm",
+]
+
+[tool.setuptools.package-dir]
+lazograph = "src/lazograph"
+adapters = "adapters"
+scripts = "scripts"
