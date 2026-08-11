@@ -9,8 +9,8 @@ LazoGraph converts private life records into four usable representations while p
 3. Entity/relationship graph.
 4. Evidence-backed wiki and training export.
 
-The system is deterministic where possible. Grounded person answers use a provider-neutral
-boundary; offline extractive synthesis is the default.
+The system is deterministic where possible. Grounded person and relationship answers use a
+provider-neutral boundary; offline extractive synthesis is the default.
 
 ## Data flow
 
@@ -57,6 +57,11 @@ effective graph, scans PII, and prints the exact assertion/retraction plan witho
 revalidates the plan under an exclusive ledger lock and appends an immutable correction event.
 `lazo corrections list` exposes audit history; `lazo corrections undo <claim-id>` appends a
 reversal event rather than deleting history.
+
+When `lazo ask` is called without `--about`, Slice 5 resolves exactly two canonical participants,
+loads the effective graph, finds a supported non-membership path, indexes active source messages
+once, and selects path and temporal evidence. It then calls the same provider boundary and
+validates citations. First-person questions may use the unique dataset persona as one endpoint.
 
 ### Adapters
 
@@ -136,13 +141,14 @@ from silently replacing the same claim differently. Corrupt or ambiguous correct
 closed. `query_kg.py`, diagnosis, smoke tests, and person answers all consume the same effective
 projection.
 
-### Grounded person answers
+### Grounded answers
 
 Stable contracts live under `src/lazograph/domain/`:
 
 - `Evidence`: persisted message ID, subject/sender, source, timestamp, excerpt, score, and optional
   manual-context provenance.
-- `Answer`: text, validated Evidence citations, confidence, entities, retrieval summary.
+- `Answer`: text, validated Evidence citations, confidence, entities, retrieval summary, explicit
+  fact statements, and explicitly labeled inferences.
 - `LLMProvider`: provider-neutral generation from selected evidence and whitelisted metadata.
 
 Default `local` mode quotes only verified evidence and never uses network access. `ollama` stays on
@@ -154,6 +160,18 @@ Manual context and active corrections remain subject-filtered like chat evidence
 labels them as stored evidence rather than claiming the subject authored them. Correction evidence
 uses `source_type=user_correction`, `authority=user`, and an auditable claim ID. Hosted providers
 receive only selected excerpts and safe provenance fields, never local paths or source hashes.
+
+Relationship mode uses the effective graph, including active corrections. `participant_in` is
+excluded from traversable relationship paths because shared dataset membership does not establish
+a personal relationship. Every generated path edge must have supporting source evidence;
+correction edges cite their ledger record. Direct queries retain all supported endpoint relations,
+while indirect queries choose a bounded shortest path. Earliest and latest endpoint evidence make
+the analyzed period explicit. Missing paths, missing support, or insufficient evidence budget
+causes abstention. Facts and interpretations remain separate in both rendered and JSON output.
+
+Hosted relationship generation receives only selected evidence plus canonical entity names,
+relationship types, hop count, path labels, and observed period. It does not receive local paths,
+raw source files, or unrelated participant messages.
 
 ### Wiki
 

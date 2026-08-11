@@ -27,10 +27,12 @@ LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/
   source hashes, PII warnings, idempotency, rollback, and grounded retrieval.
 - Preview, apply, audit, and undo relationship corrections through an immutable ledger; effective
   graph queries and grounded answers honor user corrections without altering generated triples.
+- Ask grounded questions about two people through the effective graph, with alias resolution,
+  source-backed paths, temporal evidence, explicit facts/inferences, and safe abstention.
 
-Current boundary: chat import, person-specific grounded answers, and manual context are accepted.
-Knowledge correction is demo-ready and awaiting feedback. Relationship synthesis, plans,
-suggestions, and relationship descriptions remain gated roadmap work.
+Current boundary: chat import, person-specific grounded answers, manual context, and knowledge
+correction are accepted. Relationship questions are demo-ready and awaiting feedback. Structured
+plans, suggestions, and relationship descriptions remain gated roadmap work.
 
 ## Architecture
 
@@ -203,7 +205,23 @@ active corrections priority. Rebuilds preserve the ledger. Undo appends a revers
 lazo corrections --slug sam undo <claim-id>
 ```
 
-### 7. Diagnose and smoke-test
+### 7. Ask about a relationship
+
+Omit `--about` and name exactly two people in the question:
+
+```powershell
+lazo ask "Who is Alex and how is Alex related to Samantha?" --slug sam
+lazo ask "¿Qué relación tengo con Alex?" --slug sam
+```
+
+The first-person form resolves the dataset persona when the other participant is unambiguous.
+The answer separates facts from interpretation and includes the effective graph path, confidence,
+analyzed period, and citations to original messages or user corrections. Membership-only
+`participant_in` paths are not treated as relationships. Missing paths or unsupported graph edges
+produce an abstention instead of an invented connection. Use `--debug` for the retrieval summary
+or `--json` for the full `Answer` contract.
+
+### 8. Diagnose and smoke-test
 
 ```powershell
 python scripts/diagnose.py --slug sam
@@ -213,7 +231,7 @@ python scripts/smoke_test.py --slug sam
 
 `diagnose.py` reports the active knowledge root, dataset path, Git/schema version, message and participant totals, vector count, graph health, wiki health, export health, and cross-layer invariants.
 
-### 8. Export safely
+### 9. Export safely
 
 Exports block detected PII by default before creating output:
 
@@ -243,7 +261,7 @@ training/
   probes.json
 ```
 
-### 9. Run full end-to-end verification
+### 10. Run full end-to-end verification
 
 ```powershell
 python scripts/e2e_test.py `
@@ -307,7 +325,7 @@ See [Source formats](references/source-formats.md) for details.
 | Script | Purpose |
 |---|---|
 | `lazo import` | Preview participants, safely initialize, import, and validate one chat |
-| `lazo ask` | Answer about one participant with isolated retrieval and validated citations |
+| `lazo ask` | Answer about one participant or a supported two-person relationship with validated citations |
 | `lazo context` | Preview or apply classified manual context with provenance and rollback |
 | `lazo correct` | Preview or apply one relationship replacement through an immutable ledger |
 | `lazo corrections` | List correction history or append a reversible undo event |

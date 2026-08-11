@@ -25,6 +25,11 @@
   idempotent apply, rebuild-safe effective graph projection, and reversible undo events.
 - Correction-backed answer evidence with participant isolation, user authority, and distinct
   provenance from extracted messages and manual context.
+- Slice 5 relationship questions through `lazo ask` without `--about`, including canonical alias
+  and first-person resolution, effective-graph paths, source-backed temporal citations, explicit
+  facts/inferences, and safe no-path abstention.
+- Relationship-answer regression coverage for direct and indirect paths, correction overrides,
+  date-only graph evidence, hosted-provider isolation, JSON output, and real import-to-answer E2E.
 
 ### Changed
 
@@ -36,6 +41,8 @@
   chronology.
 - Graph queries, diagnosis, smoke tests, and grounded answers read the effective graph while the
   generated SQLite graph remains an unchanged rebuildable base layer.
+- `lazo ask --about` is optional: supplying it preserves participant-isolated Slice 2 behavior;
+  omitting it routes an exactly-two-participant question to Slice 5.
 
 ### Fixed
 

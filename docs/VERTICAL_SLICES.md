@@ -1,6 +1,6 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1–4 are accepted. Slice 5 is in progress. Commands in
+> **Gated delivery document.** Slices 1–4 are accepted. Slice 5 is awaiting feedback. Commands in
 > Slices 6–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
@@ -35,10 +35,10 @@ LazoGraph already provides:
 - authentic training exports with PII policies.
 
 The current runtime provides packaged `lazo import`, `lazo ask`, `lazo context`, `lazo correct`,
-and `lazo corrections` commands for Slices 1–4. It does not yet provide:
+and `lazo corrections` commands for Slices 1–5. It does not yet provide:
 
 - a structured plan model;
-- grounded suggestions or relationship synthesis.
+- grounded suggestions or time-bounded relationship descriptions.
 
 ## Migration strategy
 
@@ -91,7 +91,7 @@ This table is the single source of truth for roadmap progress.
 | 2 | Ask About a Person | Accepted | Available | Accepted |
 | 3 | Add Manual Context | Accepted | Available | Accepted |
 | 4 | Correct Knowledge | Accepted | Available | Accepted |
-| 5 | Ask About Relationships | In Progress | Under development | Pending |
+| 5 | Ask About Relationships | Awaiting Feedback | Demo ready | Pending |
 | 6 | Pending Plans | Planned | Locked by Slice 5 | Pending |
 | 7 | Grounded Suggestions | Planned | Locked by Slice 6 | Pending |
 | 8 | Describe a Relationship | Planned | Locked by Slice 7 | Pending |
@@ -271,7 +271,7 @@ source
 - Regression tests for notices, deduplication, and equivalent sources.
 - Disposable E2E import with exact participant counts.
 
-Planned demo:
+Demo:
 
 ```bash
 lazo import sample-chat.txt --slug sample --persona Samantha
@@ -364,7 +364,7 @@ question
 - Abstention corpus for unsupported questions.
 - Hosted-provider policy test proving only selected evidence leaves the boundary.
 
-Planned demo:
+Demo:
 
 ```bash
 lazo ask "¿Qué cosas le gustan a Alex?" --about Alex
@@ -591,7 +591,8 @@ lazo corrections --slug sample undo <claim-id>
 
 ## Slice 5 — Ask About Relationships
 
-**Status:** In Progress  
+**Status:** Awaiting Feedback
+
 **Dependency:** Slice 4 accepted  
 **Unlocks:** Slice 6
 
@@ -600,10 +601,10 @@ lazo corrections --slug sample undo <claim-id>
 Explain who a person is and how people are connected using effective graph knowledge and original
 evidence.
 
-### Target interface — implementation in progress
+### Implemented interface — awaiting feedback
 
 ```bash
-lazo ask "Who is Carlos and how is he related to Juanita?"
+lazo ask "Who is Carlos and how is he related to Juanita?" --slug sample
 ```
 
 ### Flow
@@ -648,10 +649,19 @@ entity detection and alias resolution
 - Citation/path consistency evaluation.
 - Temporal relationship fixture.
 
-Planned demo:
+Demo-ready validation: 194 automated tests passed. The Slice 5 tests cover aliases, first-person
+resolution, ambiguous identities, direct and indirect paths, temporal evidence, no-path and
+missing-source abstention, correction overrides, hosted-provider isolation, JSON output, CLI
+routing, and a real import-to-relationship-answer flow. A read-only query against an existing
+private dataset also returned a direct, source-backed path with facts, interpretation, confidence,
+observed period, and six validated citations without modifying the dataset.
+
+Demo:
 
 ```bash
-lazo ask "¿Quién es Carlos y qué relación tiene con Juanita?"
+lazo ask "¿Quién es Carlos y qué relación tiene con Juanita?" --slug sample
+lazo ask "¿Qué relación tengo con Juanita?" --slug sample --debug
+lazo ask "Who is Carlos and how is he related to Juanita?" --slug sample --json
 ```
 
 ### Feedback checklist

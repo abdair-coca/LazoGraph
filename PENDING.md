@@ -20,9 +20,11 @@
   and disposable end-to-end testing. Feedback repair also canonicalizes expanded compound names,
   prunes historical identity-shadow orphans, and rejects genuinely ambiguous abbreviations.
 
-- [ ] **Slice 5 — Ask About Relationships: In Progress.** Implementing effective-KG path lookup,
-  participant-isolated temporal evidence fusion, cited facts, explicit inferences, corrections,
-  aliases, and safe no-path abstention.
+- [ ] **Slice 5 — Ask About Relationships: Awaiting Feedback.** Effective-KG path lookup,
+  participant-isolated temporal evidence, source-backed facts, explicit inferences, correction
+  priority, aliases/first-person resolution, provider-safe context, and safe abstention passed 194
+  automated tests plus read-only real-dataset verification. Slice 6 remains locked until the user
+  writes exactly `Slice 5 accepted`.
 
 The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
 their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.

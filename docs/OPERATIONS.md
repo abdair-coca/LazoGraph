@@ -71,6 +71,29 @@ Hosted mode sends the question, canonical participant name, selected evidence, a
 profile metadata. It never sends the full dataset. Provider errors and invalid citations exit
 non-zero without changing knowledge.
 
+## Ask about a relationship
+
+Omit `--about` to use Slice 5. The question must resolve exactly two participants, or use
+first-person wording plus one participant so the dataset persona supplies the other endpoint:
+
+```powershell
+lazo ask "Who is Alex and how is Alex related to Samantha?" --slug sam
+lazo ask "¿Qué relación tengo con Alex?" --slug sam
+lazo ask "Who is Alex and how is Alex related to Samantha?" --slug sam --debug
+lazo ask "Who is Alex and how is Alex related to Samantha?" --slug sam --json
+```
+
+The service reads the effective graph, so active user corrections supersede generated
+relationships. It excludes membership-only `participant_in` edges, requires original source
+support for generated relationship edges, and adds earliest/latest evidence when available.
+Rendered output separates `Facts` from `Interpretation`; JSON also exposes `facts`, `inferences`,
+the graph path, hop count, relationship types, and observed period.
+
+No path, ambiguous identities, missing source support, or an evidence budget too small for the
+required path produces a safe abstention or non-zero validation error. Relationship queries are
+read-only. The local provider sends nothing over the network; hosted mode receives only selected
+evidence and whitelisted relationship-path metadata, never dataset paths or full sources.
+
 ## Add manual context
 
 Write UTF-8 text or Markdown with blank lines between records:
@@ -140,7 +163,7 @@ fingerprint. Then apply the exact reviewed statement:
 lazo correct "Carlos is Juan's cousin, not his brother" --slug sam --apply
 lazo corrections --slug sam list
 python scripts/query_kg.py --slug sam --entity Carlos
-lazo ask "What relationship does Carlos have with Juan?" --about Carlos --slug sam
+lazo ask "Who is Carlos and how is Carlos related to Juan?" --slug sam
 ```
 
 Apply appends a user-authority correction to the private `corrections/ledger.jsonl`. Repeating an
@@ -354,8 +377,8 @@ E2E retries briefly locked files automatically. Close external database viewers.
 
 ## Current product boundary
 
-LazoGraph imports chats, answers grounded questions about one participant, adds auditable manual
-context, and applies reversible relationship corrections through an immutable ledger. The default
-answer is conservative and extractive; Ollama or an explicitly configured hosted provider supplies
-generative synthesis. Relationship-wide answers, structured plans, suggestions, and relationship
-descriptions remain planned slices.
+LazoGraph imports chats, answers grounded questions about one participant or a supported
+two-person relationship, adds auditable manual context, and applies reversible relationship
+corrections through an immutable ledger. The default answer is conservative and extractive;
+Ollama or an explicitly configured hosted provider supplies generative synthesis. Structured
+plans, grounded suggestions, and time-bounded relationship descriptions remain planned slices.

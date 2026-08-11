@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Python 3.11+ and mempalace >= 3.1.0. Windows, macOS, and Linux."
 allowed-tools: Read Write Bash
 metadata:
-  version: "0.7.0"
+  version: "0.8.0"
   project: LazoGraph
   upstream: acnlabs/persona-knowledge
   requires: "python >= 3.11, mempalace >= 3.1.0"
@@ -151,7 +151,23 @@ claims, stale previews, locks, and corrupt ledger state fail without writes. Und
 lazo corrections --slug {slug} undo <claim-id>
 ```
 
-## Phase 5: rebuild and verify
+## Phase 5: ask about relationships
+
+Omit `--about` and name two participants, or use first-person wording with one contact:
+
+```bash
+lazo ask "Who is Carlos and how is Carlos related to Juanita?" --slug {slug}
+lazo ask "¿Qué relación tengo con Alex?" --slug {slug}
+```
+
+Relationship mode resolves canonical identities, reads the effective graph, ignores
+membership-only `participant_in` paths, and requires original source support for generated edges.
+It returns path confidence, temporal evidence, citations, separate facts and interpretations, or
+abstains when the relationship is unsupported. Active user corrections take priority. `--debug`
+shows the retrieval summary and `--json` exposes the structured answer. Hosted providers receive
+only selected evidence and safe path metadata.
+
+## Phase 6: rebuild and verify
 
 Preferred coordinated path:
 
@@ -179,7 +195,7 @@ python scripts/build_wiki.py --slug {slug}
 python scripts/lint_wiki.py --slug {slug}
 ```
 
-## Phase 6: retrieve knowledge
+## Phase 7: retrieve knowledge
 
 Semantic evidence:
 
@@ -200,9 +216,10 @@ python scripts/query_kg.py --slug {slug} --stats
 ```
 
 `query_kg.py` reads the effective graph, including active user corrections. `query_memory.py`
-returns evidence rather than generated prose; use `lazo ask` for grounded person answers.
+returns evidence rather than generated prose; use `lazo ask` for grounded person or relationship
+answers.
 
-## Phase 7: diagnose
+## Phase 8: diagnose
 
 ```bash
 python scripts/diagnose.py --slug {slug}
@@ -212,7 +229,7 @@ python scripts/smoke_test.py --slug {slug}
 
 Healthy completion requires matching source/message/profile/vector counts, readable graph, valid wiki, and five passing functional smoke probes.
 
-## Phase 8: recover sources
+## Phase 9: recover sources
 
 ```bash
 python scripts/quarantine.py --slug {slug} list
@@ -223,7 +240,7 @@ python scripts/quarantine.py --slug {slug} restore <batch> --apply
 
 Restore is a plan unless `--apply` is supplied. Apply refuses active filename conflicts, restores source-index metadata, rebuilds affected layers, and rolls back source plus derived state after failure.
 
-## Phase 9: export
+## Phase 10: export
 
 Default PII block:
 
@@ -252,7 +269,7 @@ metadata.json
 probes.json
 ```
 
-## Phase 10: end-to-end test
+## Phase 11: end-to-end test
 
 ```bash
 python scripts/e2e_test.py \
