@@ -30,6 +30,11 @@
   facts/inferences, and safe no-path abstention.
 - Relationship-answer regression coverage for direct and indirect paths, correction overrides,
   date-only graph evidence, hosted-provider isolation, JSON output, and real import-to-answer E2E.
+- Slice 6 pending plans: deterministic timezone-aware Plan contracts, lifecycle extraction with
+  source-backed transitions, atomic JSON projection, read-only `lazo plans list/show`, and explicit
+  pending-plan questions with creation/latest-transition citations.
+- Dedicated `lazograph-plans` Knowledge Graph projection with stable plan nodes and participant/
+  location edges; plan status remains structured data and is excluded from relationship traversal.
 
 ### Changed
 
@@ -43,6 +48,10 @@
   generated SQLite graph remains an unchanged rebuildable base layer.
 - `lazo ask --about` is optional: supplying it preserves participant-isolated Slice 2 behavior;
   omitting it routes an exactly-two-participant question to Slice 5.
+- Explicit pending-plan questions are recognized before relationship fallback. Imports and atomic
+  rebuilds refresh plans from active source backups; ambiguous candidates remain unresolved.
+- New datasets declare IANA `timezone` metadata (default `UTC`) for deterministic relative-date
+  resolution, and plan projections fail closed when that metadata is missing or invalid.
 
 ### Fixed
 

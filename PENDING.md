@@ -25,9 +25,12 @@
   priority, aliases/first-person resolution, provider-safe context, and safe abstention passed 194
   automated tests plus read-only real-dataset verification.
 
-- [ ] **Slice 6 — Pending Plans: In Progress.** Implementing structured plan extraction,
-  deterministic date and timezone resolution, lifecycle and duplicate matching, evidence-backed
-  state transitions, participant/location projection, and grounded list/show/ask interfaces.
+- [ ] **Slice 6 — Pending Plans: Awaiting Feedback.** Structured plan extraction, deterministic
+  date and timezone resolution, lifecycle and duplicate matching, evidence-backed state transitions,
+  participant/location projection, and grounded list/show/ask interfaces are demo ready. Four
+  implementation commits (`79f5400`, `41f2d70`, `c2cb4a8`, `66f9e9b`) passed 212 full tests,
+  including 51 focused Slice 6 tests. Awaiting the exact phrase `Slice 6 accepted`; Slice 7 remains
+  locked.
 
 The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
 their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.

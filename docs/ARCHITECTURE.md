@@ -27,6 +27,7 @@ source
        -> ChromaDB vectors
        -> participants.json
        -> knowledge_graph.sqlite3
+       -> plans/projection.json
        -> wiki/*.md
        -> versioned export
 ```
@@ -62,6 +63,10 @@ When `lazo ask` is called without `--about`, Slice 5 resolves exactly two canoni
 loads the effective graph, finds a supported non-membership path, indexes active source messages
 once, and selects path and temporal evidence. It then calls the same provider boundary and
 validates citations. First-person questions may use the unique dataset persona as one endpoint.
+
+Slice 6 adds `lazo plans list|show` and explicit pending-plan routing in `lazo ask`. Imports and
+coordinated rebuilds extract plans from active source backups into an atomically replaced
+`plans/projection.json`; list/show and pending-plan answers never mutate source data.
 
 ### Adapters
 
@@ -110,7 +115,10 @@ prefix and reject abbreviations shared by multiple participants.
 
 ### Knowledge graph
 
-The SQLite graph stores entities and triples. Managed triples use adapter name `persona-knowledge`, allowing rebuilds to replace generated relationships while preserving manual triples.
+The SQLite graph stores entities and triples. Generated relationship triples use adapter name
+`persona-knowledge`, allowing rebuilds to replace generated relationships while preserving manual
+triples. Plan projection triples use the separate `lazograph-plans` adapter so they can be replaced
+atomically without touching generated relationships or effective user corrections.
 
 Generated relationship confidence:
 
@@ -120,6 +128,24 @@ Generated relationship confidence:
 - `0.84`: bounded pronoun coreference.
 
 Person extraction combines known participants, contextual cues, conservative multiword NER, stop-token rejection, and a minimum confidence threshold. Coreference expires after two messages from the same persona sender.
+
+Plan projection adds stable `plan:<id>` nodes and source-backed `plan_participant` and
+`plan_location` edges. Lifecycle status (`proposed`, `pending`, `scheduled`, `completed`, or
+`cancelled`) remains a structured Plan field, never a graph entity. Relationship traversal excludes
+`plan_` edges, preventing plan membership from being mistaken for a personal relationship.
+
+### Pending plans
+
+`Plan` records are immutable-shaped derived values with deterministic IDs based on normalized title,
+participants, timezone-aware proposal time, and source IDs. Every lifecycle transition carries
+timezone-aware occurrence time, source IDs, confidence, and provenance. The extractor resolves
+relative dates in the dataset's declared IANA timezone and withholds ambiguous identities,
+duplicates, terminal updates, and invalid transitions as unresolved rather than guessing.
+
+`dataset.json` must declare a valid IANA `timezone` (new datasets default to `UTC`). The projection
+stores schema version and timezone, rejects mismatches or corrupt records, uses an exclusive lock,
+and replaces the complete JSON atomically. Source IDs remain line-addressable so pending-plan
+answers can cite the creation and latest transition evidence.
 
 ### Effective knowledge and correction ledger
 
@@ -216,6 +242,7 @@ Assistant counts and active source counts must also match. Export source snapsho
 - `.mempalace/palace/`
 - `participants.json`
 - `dataset.json`
+- `plans/`
 - `wiki/`
 
 Any stage failure or keyboard interruption restores exact prior state and removes paths created during the failed transaction.
@@ -226,7 +253,9 @@ Quarantine restoration uses the same lock and snapshots derived layers plus sour
 
 ### Unit/regression suite
 
-Tests cover localized parsing, source equivalence, reconciliation, vector compatibility, graph extraction, wiki, exports, Windows runtime, quarantine rollback, and PII policy.
+Tests cover localized parsing, source equivalence, reconciliation, vector compatibility, graph
+extraction, lifecycle-aware plans, read-only plan interfaces, plan KG projection, wiki, exports,
+Windows runtime, quarantine rollback, and PII policy.
 
 ### Smoke tests
 

@@ -1,6 +1,6 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1–5 are accepted. Slice 6 is in progress. Commands in
+> **Gated delivery document.** Slices 1–5 are accepted. Slice 6 is awaiting feedback. Commands in
 > Slices 7–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
@@ -92,7 +92,7 @@ This table is the single source of truth for roadmap progress.
 | 3 | Add Manual Context | Accepted | Available | Accepted |
 | 4 | Correct Knowledge | Accepted | Available | Accepted |
 | 5 | Ask About Relationships | Accepted | Available | Accepted |
-| 6 | Pending Plans | In Progress | Under development | Pending |
+| 6 | Pending Plans | Awaiting Feedback | Demo ready | Pending |
 | 7 | Grounded Suggestions | Planned | Locked by Slice 6 | Pending |
 | 8 | Describe a Relationship | Planned | Locked by Slice 7 | Pending |
 
@@ -688,7 +688,7 @@ lazo ask "Who is Carlos and how is he related to Juanita?" --slug sample --json
 
 ## Slice 6 — Pending Plans
 
-**Status:** In Progress
+**Status:** Awaiting Feedback
 **Dependency:** Slice 5 accepted  
 **Unlocks:** Slice 7
 
@@ -696,12 +696,12 @@ lazo ask "Who is Carlos and how is he related to Juanita?" --slug sample --json
 
 Identify, update, list, and answer questions about plans or commitments.
 
-### Target interfaces — implementation in progress
+### Implemented interfaces — awaiting feedback
 
 ```bash
-lazo ask "Do we have any pending plans?"
-lazo plans list
-lazo plans show <plan-id>
+lazo ask "Do we have any pending plans?" --slug sample
+lazo plans list --slug sample
+lazo plans show <plan-id> --slug sample
 ```
 
 ### Flow
@@ -711,19 +711,24 @@ messages + manual claims
 -> plan candidate extraction
 -> participant/date/location resolution
 -> duplicate and lifecycle matching
--> structured Plan records
--> KG projections + citations
+-> structured Plan records + lifecycle evidence
+-> atomic plan projection + KG participant/location edges
 -> query/list interfaces
 ```
 
 ### Implementation requirements
 
-- Use the shared `Plan` model and fixed lifecycle statuses.
-- Resolve relative dates from message timestamp and dataset timezone.
+- Use the shared `Plan` model and fixed lifecycle statuses: `proposed`, `pending`, `scheduled`,
+  `completed`, and `cancelled`.
+- Resolve relative dates from message timestamp and the dataset's IANA timezone; reject datasets
+  without a valid timezone instead of using host-local time.
 - Match later completion, cancellation, or rescheduling evidence to earlier plans.
 - Keep ambiguous candidates unresolved until confirmed.
 - Project participants and locations into KG without representing status as an entity.
-- Retain source IDs and confidence for every state transition.
+- Retain source IDs and confidence for every state transition; unresolved or ambiguous candidates
+  remain outside the projection.
+- Replace the dedicated `lazograph-plans` KG adapter atomically. Store stable `plan:<id>` nodes and
+  `plan_participant`/`plan_location` edges only; lifecycle status remains structured data.
 
 ### Out of scope
 
@@ -748,12 +753,17 @@ messages + manual claims
 - Multi-participant and location tests.
 - Query/list output tests with citations.
 
-Planned demo:
+Demo-ready validation: 212 full tests passed, including 51 focused Slice 6 tests covering plan
+identity, timezone/date resolution, lifecycle transitions, duplicate and ambiguous handling,
+read-only CLI/list/show/ask behavior, rebuild integration, and KG projection boundaries.
+
+Demo:
 
 ```bash
-lazo plans list
-lazo ask "¿Tenemos alguna actividad pendiente?"
-lazo plans show <plan-id>
+lazo plans list --slug sample --status pending
+lazo plans list --slug sample --status scheduled --participant Alex --json
+lazo ask "¿Tenemos alguna actividad pendiente?" --slug sample
+lazo plans show <plan-id> --slug sample --json
 ```
 
 ### Feedback checklist
@@ -771,10 +781,10 @@ lazo plans show <plan-id>
 | Decision | Pending |
 | Required phrase | `Slice 6 accepted` |
 | Date | — |
-| Implementation commit | — |
-| Test results | — |
-| Demo command | — |
-| User notes | — |
+| Implementation commit | `79f5400`, `41f2d70`, `c2cb4a8`, `66f9e9b` |
+| Test results | 212 full tests passed; 51 focused Slice 6 tests passed |
+| Demo command | `lazo plans list --slug sample --status pending`; `lazo plans list --slug sample --status scheduled --participant Alex --json`; `lazo ask "¿Tenemos alguna actividad pendiente?" --slug sample`; `lazo plans show <plan-id> --slug sample --json` |
+| User notes | Pending-plan extraction, lifecycle evidence, read-only interfaces, deterministic timezone handling, and KG participant/location projection are ready for review |
 
 ---
 

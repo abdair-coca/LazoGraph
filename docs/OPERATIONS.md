@@ -97,17 +97,22 @@ evidence and whitelisted relationship-path metadata, never dataset paths or full
 ## Inspect pending plans
 
 Imports and coordinated rebuilds refresh the derived projection from active source backups.
-List/show never write:
+Plan candidates use the dataset's valid IANA timezone for relative dates. Lifecycle states are
+`proposed`, `pending`, `scheduled`, `completed`, and `cancelled`; ambiguous identities, duplicate
+matches, and invalid updates stay unresolved instead of changing state. List/show never write:
 
 ```powershell
-lazo plans list --slug sam --status pending --participant Alex
-lazo plans show <plan-id> --slug sam --json
+lazo plans list --slug sam --status pending
+lazo plans list --slug sam --status scheduled --participant Alex --json
 lazo ask "Do we have any pending plans?" --slug sam
+lazo plans show <plan-id> --slug sam --json
 ```
 
 Plan rebuilds atomically replace a dedicated managed KG projection. It contains stable plan nodes
-and source-backed participant/location edges only; status remains a structured field, never a graph
-entity. Existing generated relationships and effective user corrections remain separate.
+and source-backed participant/location edges only through the `lazograph-plans` adapter; status
+remains a structured field, never a graph entity. Existing generated relationships and effective
+user corrections remain separate, and relationship traversal excludes plan edges. If `dataset.json`
+lacks a valid IANA `timezone`, rebuild fails closed rather than using host-local time.
 
 ## Add manual context
 
@@ -392,8 +397,9 @@ E2E retries briefly locked files automatically. Close external database viewers.
 
 ## Current product boundary
 
-LazoGraph imports chats, answers grounded questions about one participant or a supported
-two-person relationship, adds auditable manual context, and applies reversible relationship
-corrections through an immutable ledger. The default answer is conservative and extractive;
-Ollama or an explicitly configured hosted provider supplies generative synthesis. Structured
-plans, grounded suggestions, and time-bounded relationship descriptions remain planned slices.
+LazoGraph imports chats, answers grounded questions about one participant, a supported two-person
+relationship, or explicit pending plans, adds auditable manual context, and applies reversible
+relationship corrections through an immutable ledger. The default answer is conservative and
+extractive; Ollama or an explicitly configured hosted provider supplies generative synthesis. Slice
+6 pending plans are demo-ready and awaiting feedback; grounded suggestions and time-bounded
+relationship descriptions remain planned slices.

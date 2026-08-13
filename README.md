@@ -29,10 +29,12 @@ LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/
   graph queries and grounded answers honor user corrections without altering generated triples.
 - Ask grounded questions about two people through the effective graph, with alias resolution,
   source-backed paths, temporal evidence, explicit facts/inferences, and safe abstention.
-- List and inspect source-derived plans, or ask an explicit pending-plan question with citations.
+- Extract lifecycle-aware source-derived plans, list/show them read-only, and answer explicit
+  pending-plan questions with creation and latest-transition citations. Plan participants and
+  locations are projected into the Knowledge Graph; lifecycle status remains structured data.
 
-Current boundary: Slices 1–5 are accepted. Pending plans are under development; suggestions and
-relationship descriptions remain gated roadmap work.
+Current boundary: Slices 1–5 are accepted. Slice 6 pending plans are demo-ready and awaiting
+feedback. Suggestions and relationship descriptions remain gated roadmap work.
 
 ## Architecture
 
@@ -221,7 +223,24 @@ analyzed period, and citations to original messages or user corrections. Members
 produce an abstention instead of an invented connection. Use `--debug` for the retrieval summary
 or `--json` for the full `Answer` contract.
 
-### 8. Diagnose and smoke-test
+### 8. Inspect pending plans
+
+Plan extraction runs during import and coordinated rebuilds. It uses the dataset's IANA timezone to
+resolve relative dates and keeps ambiguous candidates unresolved. List/show are read-only; the
+derived projection is atomically rebuilt from active source backups.
+
+```powershell
+lazo plans list --slug sam --status pending
+lazo plans list --slug sam --status scheduled --participant Alex --json
+lazo ask "Do we have any pending plans?" --slug sam
+lazo plans show <plan-id> --slug sam --json
+```
+
+The Knowledge Graph receives stable `plan:<id>` nodes and source-backed `plan_participant` and
+`plan_location` edges through the `lazograph-plans` adapter. Plan status is never represented as a
+graph entity, and relationship traversal excludes plan edges.
+
+### 9. Diagnose and smoke-test
 
 ```powershell
 python scripts/diagnose.py --slug sam
@@ -231,7 +250,7 @@ python scripts/smoke_test.py --slug sam
 
 `diagnose.py` reports the active knowledge root, dataset path, Git/schema version, message and participant totals, vector count, graph health, wiki health, export health, and cross-layer invariants.
 
-### 9. Export safely
+### 10. Export safely
 
 Exports block detected PII by default before creating output:
 
@@ -261,7 +280,7 @@ training/
   probes.json
 ```
 
-### 10. Run full end-to-end verification
+### 11. Run full end-to-end verification
 
 ```powershell
 python scripts/e2e_test.py `
