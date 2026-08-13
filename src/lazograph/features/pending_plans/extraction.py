@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from lazograph.domain.identity import IdentityResolutionError, load_profiles
 from lazograph.domain.plans import Plan, PlanValidationError
 from lazograph.features.pending_plans.storage import dataset_timezone, rebuild_projection
+from lazograph.features.pending_plans.kg_projection import rebuild_kg_projection
 
 
 @dataclass(frozen=True)
@@ -200,4 +201,5 @@ def rebuild_extracted_projection(dataset_dir: Path) -> PlanExtraction:
     """Persist the complete deterministic projection while preserving source messages."""
     extraction = extract_plans(dataset_dir)
     rebuild_projection(dataset_dir, extraction.plans)
+    rebuild_kg_projection(dataset_dir, extraction.plans)
     return extraction

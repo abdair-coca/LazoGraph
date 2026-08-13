@@ -144,6 +144,7 @@ def _relationship_graph(
     usable = [
         dict(item) for item in relationships
         if item.get("type") != "participant_in"
+        and not str(item.get("type", "")).startswith("plan_")
         and item.get("from") and item.get("to")
     ]
     return entities, usable

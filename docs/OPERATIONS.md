@@ -105,8 +105,9 @@ lazo plans show <plan-id> --slug sam --json
 lazo ask "Do we have any pending plans?" --slug sam
 ```
 
-Plan status remains a structured field, not a graph entity. KG plan projection is intentionally
-deferred until its SQLite rebuild/rollback boundary can be added as a separate bounded work unit.
+Plan rebuilds atomically replace a dedicated managed KG projection. It contains stable plan nodes
+and source-backed participant/location edges only; status remains a structured field, never a graph
+entity. Existing generated relationships and effective user corrections remain separate.
 
 ## Add manual context
 
