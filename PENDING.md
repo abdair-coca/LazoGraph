@@ -20,11 +20,14 @@
   and disposable end-to-end testing. Feedback repair also canonicalizes expanded compound names,
   prunes historical identity-shadow orphans, and rejects genuinely ambiguous abbreviations.
 
-- [ ] **Slice 5 — Ask About Relationships: Awaiting Feedback.** Effective-KG path lookup,
+- [x] **Slice 5 — Ask About Relationships: Accepted.** Effective-KG path lookup,
   participant-isolated temporal evidence, source-backed facts, explicit inferences, correction
   priority, aliases/first-person resolution, provider-safe context, and safe abstention passed 194
-  automated tests plus read-only real-dataset verification. Slice 6 remains locked until the user
-  writes exactly `Slice 5 accepted`.
+  automated tests plus read-only real-dataset verification.
+
+- [ ] **Slice 6 — Pending Plans: In Progress.** Implementing structured plan extraction,
+  deterministic date and timezone resolution, lifecycle and duplicate matching, evidence-backed
+  state transitions, participant/location projection, and grounded list/show/ask interfaces.
 
 The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
 their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.

@@ -1,7 +1,7 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1–4 are accepted. Slice 5 is awaiting feedback. Commands in
-> Slices 6–8 remain planned and are not implemented. Existing
+> **Gated delivery document.** Slices 1–5 are accepted. Slice 6 is in progress. Commands in
+> Slices 7–8 remain planned and are not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -91,8 +91,8 @@ This table is the single source of truth for roadmap progress.
 | 2 | Ask About a Person | Accepted | Available | Accepted |
 | 3 | Add Manual Context | Accepted | Available | Accepted |
 | 4 | Correct Knowledge | Accepted | Available | Accepted |
-| 5 | Ask About Relationships | Awaiting Feedback | Demo ready | Pending |
-| 6 | Pending Plans | Planned | Locked by Slice 5 | Pending |
+| 5 | Ask About Relationships | Accepted | Available | Accepted |
+| 6 | Pending Plans | In Progress | Under development | Pending |
 | 7 | Grounded Suggestions | Planned | Locked by Slice 6 | Pending |
 | 8 | Describe a Relationship | Planned | Locked by Slice 7 | Pending |
 
@@ -487,7 +487,7 @@ lazo ask "¿Cuándo cumple años Alex?" --about Alex
 
 ## Slice 4 — Correct Knowledge
 
-**Status:** Awaiting Feedback
+**Status:** Accepted
 **Dependency:** Slice 3 accepted  
 **Unlocks:** Slice 5
 
@@ -591,7 +591,7 @@ lazo corrections --slug sample undo <claim-id>
 
 ## Slice 5 — Ask About Relationships
 
-**Status:** Awaiting Feedback
+**Status:** Accepted
 
 **Dependency:** Slice 4 accepted  
 **Unlocks:** Slice 6
@@ -601,7 +601,7 @@ lazo corrections --slug sample undo <claim-id>
 Explain who a person is and how people are connected using effective graph knowledge and original
 evidence.
 
-### Implemented interface — awaiting feedback
+### Implemented interface — accepted
 
 ```bash
 lazo ask "Who is Carlos and how is he related to Juanita?" --slug sample
@@ -666,29 +666,29 @@ lazo ask "Who is Carlos and how is he related to Juanita?" --slug sample --json
 
 ### Feedback checklist
 
-- [ ] Entity interpretation is correct.
-- [ ] Relationship explanation matches user understanding.
-- [ ] Facts and inference are distinguishable.
-- [ ] Citations/path provide enough trust.
-- [ ] Missing-evidence behavior is acceptable.
+- [x] Entity interpretation is correct.
+- [x] Relationship explanation matches user understanding.
+- [x] Facts and inference are distinguishable.
+- [x] Citations/path provide enough trust.
+- [x] Missing-evidence behavior is acceptable.
 
 ### Acceptance record
 
 | Field | Value |
 |---|---|
-| Decision | Pending |
+| Decision | Accepted |
 | Required phrase | `Slice 5 accepted` |
-| Date | — |
-| Implementation commit | — |
-| Test results | — |
-| Demo command | — |
-| User notes | — |
+| Date | 2026-08-13 |
+| Implementation commit | `5f8183e` |
+| Test results | 194 automated tests passed; import-to-relationship-answer E2E and read-only real-dataset verification passed |
+| Demo command | Grounded relationship ask; first-person ask with debug; structured JSON ask |
+| User notes | Relationship interpretation, fact/inference separation, citations, and abstention behavior approved |
 
 ---
 
 ## Slice 6 — Pending Plans
 
-**Status:** Planned  
+**Status:** In Progress
 **Dependency:** Slice 5 accepted  
 **Unlocks:** Slice 7
 
@@ -696,7 +696,7 @@ lazo ask "Who is Carlos and how is he related to Juanita?" --slug sample --json
 
 Identify, update, list, and answer questions about plans or commitments.
 
-### Planned interfaces — not implemented
+### Target interfaces — implementation in progress
 
 ```bash
 lazo ask "Do we have any pending plans?"
