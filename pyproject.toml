@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "mempalace>=3.1.0",
+  "tzdata>=2025.2",
 ]
 
 [project.scripts]
@@ -26,6 +27,7 @@ packages = [
   "lazograph.features.ask_relationship",
   "lazograph.features.add_context",
   "lazograph.features.correct_knowledge",
+  "lazograph.features.pending_plans",
   "lazograph.domain",
   "lazograph.ports",
   "lazograph.infrastructure",

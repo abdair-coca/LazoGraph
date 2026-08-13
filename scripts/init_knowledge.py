@@ -71,6 +71,7 @@ def init_dataset(slug: str, name: str, *, knowledge_root: Path | None = None) ->
         'name': name,
         'created_at': datetime.now(timezone.utc).isoformat(),
         'framework': 'persona-knowledge',
+        'timezone': 'UTC',
         'version': '0.1.0',
         'stats': {
             'sources': 0,
