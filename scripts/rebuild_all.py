@@ -24,6 +24,7 @@ AFFECTED_PATHS = (
     Path('participants.json'),
     Path('dataset.json'),
     Path('wiki'),
+    Path('plans'),
 )
 
 
@@ -103,6 +104,11 @@ def _build_stages(slug: str) -> list[dict]:
             'arguments': ('--slug', slug, '--rebuild-kg'),
         },
         {
+            'name': 'plans',
+            'script': 'rebuild_plans.py',
+            'arguments': ('--slug', slug),
+        },
+        {
             'name': 'wiki',
             'script': 'build_wiki.py',
             'arguments': ('--slug', slug),
@@ -131,6 +137,7 @@ def _run_stage(stage: dict, dataset_dir: Path):
     env['OPENPERSONA_KNOWLEDGE'] = str(dataset_dir.parent)
     env['PYTHONUTF8'] = '1'
     env['PYTHONUNBUFFERED'] = '1'
+    env['PYTHONPATH'] = str(PROJECT_DIR / 'src') + os.pathsep + env.get('PYTHONPATH', '')
     subprocess.run(
         [
             sys.executable,

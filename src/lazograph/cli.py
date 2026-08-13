@@ -9,6 +9,14 @@ from lazograph.config import ConfigurationError, knowledge_root, resolve_dataset
 from lazograph.domain.identity import IdentityResolutionError
 from lazograph.features.ask_person.service import GroundingError, answer_about_person
 from lazograph.features.ask_relationship import answer_about_relationship
+from lazograph.features.pending_plans import (
+    PlanProjectionError,
+    answer_plan_question,
+    is_plan_question,
+    list_plans,
+    rebuild_extracted_projection,
+    show_plan,
+)
 from lazograph.features.add_context import (
     ContextValidationError,
     apply_context,
@@ -163,6 +171,20 @@ def build_parser() -> argparse.ArgumentParser:
     undo_parser.add_argument("claim_id", help="Correction, assertion, or retraction claim ID")
     undo_parser.add_argument("--json", action="store_true", help="Output JSON")
     undo_parser.set_defaults(handler=_run_corrections)
+
+    plans_parser = commands.add_parser("plans", help="Inspect source-backed plans")
+    plan_commands = plans_parser.add_subparsers(dest="plan_command", required=True)
+    plans_list = plan_commands.add_parser("list", help="List the derived plan projection")
+    plans_list.add_argument("--slug", required=True, help="Dataset identifier")
+    plans_list.add_argument("--status", choices=("proposed", "pending", "scheduled", "completed", "cancelled"))
+    plans_list.add_argument("--participant", help="Filter by canonical participant name")
+    plans_list.add_argument("--json", action="store_true", help="Output JSON")
+    plans_list.set_defaults(handler=_run_plans)
+    plans_show = plan_commands.add_parser("show", help="Show one plan and its lifecycle")
+    plans_show.add_argument("plan_id", help="Stable plan ID")
+    plans_show.add_argument("--slug", required=True, help="Dataset identifier")
+    plans_show.add_argument("--json", action="store_true", help="Output JSON")
+    plans_show.set_defaults(handler=_run_plans)
     return parser
 
 
@@ -276,6 +298,12 @@ def _run_import(args: argparse.Namespace) -> int:
     result = dataset_invariants.validate_dataset(preview.dataset_dir)
     if not dataset_invariants.print_report(result):
         return 2
+    try:
+        extraction = rebuild_extracted_projection(preview.dataset_dir)
+    except PlanProjectionError as exc:
+        print(f"Import completed, but plan projection failed: {exc}", file=sys.stderr)
+        return 2
+    print(f"Plans derived: {len(extraction.plans)} ({len(extraction.unresolved)} unresolved)")
     print("Import complete.")
     return 0
 
@@ -332,6 +360,8 @@ def _run_ask(args: argparse.Namespace) -> int:
                 limit=args.limit,
                 evidence_budget=args.evidence_budget,
             )
+        elif is_plan_question(args.question):
+            answer = answer_plan_question(dataset_dir, args.question)
         else:
             answer = answer_about_relationship(
                 dataset_dir,
@@ -357,6 +387,44 @@ def _run_ask(args: argparse.Namespace) -> int:
         print(json.dumps(answer.to_dict(), indent=2, ensure_ascii=False))
     else:
         _print_answer(answer, debug=args.debug)
+    return 0
+
+
+def _run_plans(args: argparse.Namespace) -> int:
+    try:
+        dataset_dir = resolve_dataset(args.slug)
+        if args.plan_command == "show":
+            plan = show_plan(dataset_dir, args.plan_id)
+            payload = plan.to_dict()
+        else:
+            plans = list_plans(
+                dataset_dir,
+                status=args.status,
+                participant=args.participant,
+            )
+            payload = [plan.to_dict() for plan in plans]
+    except (ConfigurationError, PlanProjectionError, OSError) as exc:
+        print(f"Plans failed: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        import json
+
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    plans = [plan] if args.plan_command == "show" else plans
+    print(f"Plans: {len(plans)}")
+    for item in plans:
+        scheduled = item.scheduled_for.isoformat() if item.scheduled_for else "unscheduled"
+        print(f"  {item.id} [{item.status}] {item.title}")
+        print(f"    participants: {', '.join(item.participants) or 'none'}")
+        print(f"    scheduled: {scheduled}; location: {item.location or 'unknown'}")
+        print(f"    sources: {', '.join(item.source_ids)}")
+        for transition in item.transitions:
+            print(
+                f"    {transition.from_status} -> {transition.to_status} "
+                f"at {transition.occurred_at.isoformat()} "
+                f"[{', '.join(transition.source_ids)}]"
+            )
     return 0
 
 

@@ -29,10 +29,10 @@ LazoGraph started from [`acnlabs/persona-knowledge`](https://github.com/acnlabs/
   graph queries and grounded answers honor user corrections without altering generated triples.
 - Ask grounded questions about two people through the effective graph, with alias resolution,
   source-backed paths, temporal evidence, explicit facts/inferences, and safe abstention.
+- List and inspect source-derived plans, or ask an explicit pending-plan question with citations.
 
-Current boundary: chat import, person-specific grounded answers, manual context, and knowledge
-correction are accepted. Relationship questions are demo-ready and awaiting feedback. Structured
-plans, suggestions, and relationship descriptions remain gated roadmap work.
+Current boundary: Slices 1–5 are accepted. Pending plans are under development; suggestions and
+relationship descriptions remain gated roadmap work.
 
 ## Architecture
 
@@ -329,6 +329,7 @@ See [Source formats](references/source-formats.md) for details.
 | `lazo context` | Preview or apply classified manual context with provenance and rollback |
 | `lazo correct` | Preview or apply one relationship replacement through an immutable ledger |
 | `lazo corrections` | List correction history or append a reversible undo event |
+| `lazo plans` | Read the derived plan projection without mutating private data |
 | `init_knowledge.py` | Initialize dataset or print basic stats |
 | `ingest.py` | Parse, deduplicate, store, reconcile, migrate, and rebuild |
 | `query_memory.py` | Participant-filtered semantic retrieval |

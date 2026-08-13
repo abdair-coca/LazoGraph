@@ -94,6 +94,20 @@ required path produces a safe abstention or non-zero validation error. Relations
 read-only. The local provider sends nothing over the network; hosted mode receives only selected
 evidence and whitelisted relationship-path metadata, never dataset paths or full sources.
 
+## Inspect pending plans
+
+Imports and coordinated rebuilds refresh the derived projection from active source backups.
+List/show never write:
+
+```powershell
+lazo plans list --slug sam --status pending --participant Alex
+lazo plans show <plan-id> --slug sam --json
+lazo ask "Do we have any pending plans?" --slug sam
+```
+
+Plan status remains a structured field, not a graph entity. KG plan projection is intentionally
+deferred until its SQLite rebuild/rollback boundary can be added as a separate bounded work unit.
+
 ## Add manual context
 
 Write UTF-8 text or Markdown with blank lines between records:

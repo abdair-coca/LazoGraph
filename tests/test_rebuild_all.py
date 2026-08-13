@@ -26,6 +26,8 @@ class TestAtomicRebuild(unittest.TestCase):
         self.dataset.joinpath('participants.json').write_text('old-participants')
         self.dataset.joinpath('dataset.json').write_text('old-dataset')
         self.wiki.joinpath('identity.md').write_text('old-wiki')
+        (self.dataset / 'plans').mkdir()
+        self.dataset.joinpath('plans', 'projection.json').write_text('old-plans')
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -44,6 +46,8 @@ class TestAtomicRebuild(unittest.TestCase):
             elif stage['name'] == 'wiki':
                 self.wiki.joinpath('identity.md').write_text('new-wiki')
                 self.wiki.joinpath('new-page.md').write_text('new-page')
+            elif stage['name'] == 'plans':
+                self.dataset.joinpath('plans', 'projection.json').write_text('new-plans')
             if stage['name'] == fail_on:
                 if interrupt:
                     raise KeyboardInterrupt()
@@ -62,6 +66,7 @@ class TestAtomicRebuild(unittest.TestCase):
         self.assertEqual(self.wiki.joinpath('identity.md').read_text(), 'old-wiki')
         self.assertFalse(self.wiki.joinpath('new-page.md').exists())
         self.assertFalse(self.dataset.joinpath('.rebuild.lock').exists())
+        self.assertEqual(self.dataset.joinpath('plans', 'projection.json').read_text(), 'old-plans')
 
     def test_atomic_success_keeps_new_state_and_runs_all_stages(self):
         calls = []
@@ -74,7 +79,7 @@ class TestAtomicRebuild(unittest.TestCase):
         )
 
         self.assertEqual(calls, [
-            'vectors', 'knowledge-graph', 'wiki', 'wiki-lint', 'smoke-tests',
+            'vectors', 'knowledge-graph', 'plans', 'wiki', 'wiki-lint', 'smoke-tests',
         ])
         self.assertFalse(result['rolled_back'])
         self.assertEqual(self.palace.joinpath('chroma.sqlite3').read_bytes(), b'new-vectors')
