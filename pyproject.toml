@@ -9,7 +9,7 @@ description = "Local-first personal knowledge graph built from private life data
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "mempalace>=3.1.0",
+  "mempalace>=3.3.6",
   "tzdata>=2025.2",
 ]
 
