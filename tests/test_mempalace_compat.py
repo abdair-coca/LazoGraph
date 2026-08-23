@@ -3,6 +3,7 @@
 
 import io
 import json
+import os
 import sqlite3
 import sys
 import tempfile
@@ -759,6 +760,31 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(updated['assistant_turns'], 2113)
         self.assertEqual(updated['kg_entities'], 3)
         self.assertEqual(updated['kg_relationships'], 1)
+
+
+class TestMultilingualEmbeddingDefault(unittest.TestCase):
+    """Spanish chat data needs a multilingual embedder; the project default
+    must be embeddinggemma unless the user explicitly chose another model."""
+
+    def test_runtime_sets_multilingual_default_when_unset(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop('MEMPALACE_EMBEDDING_MODEL', None)
+            from runtime import configure_embedding_model
+
+            configure_embedding_model()
+
+            self.assertEqual(
+                os.environ.get('MEMPALACE_EMBEDDING_MODEL'),
+                'embeddinggemma',
+            )
+
+    def test_explicit_user_model_is_never_overridden(self):
+        with patch.dict(os.environ, {'MEMPALACE_EMBEDDING_MODEL': 'minilm'}, clear=False):
+            from runtime import configure_embedding_model
+
+            configure_embedding_model()
+
+            self.assertEqual(os.environ.get('MEMPALACE_EMBEDDING_MODEL'), 'minilm')
 
 
 if __name__ == '__main__':
