@@ -1,7 +1,7 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1–5 are accepted. Slice 6 is awaiting feedback. Commands in
-> Slices 7–8 remain planned and are not implemented. Existing
+> **Gated delivery document.** Slices 1–6 are accepted. Slice 7 is awaiting feedback. Slice 8 remains
+> planned and is not implemented. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -35,10 +35,9 @@ LazoGraph already provides:
 - authentic training exports with PII policies.
 
 The current runtime provides packaged `lazo import`, `lazo ask`, `lazo context`, `lazo correct`,
-and `lazo corrections` commands for Slices 1–5. It does not yet provide:
+`lazo corrections`, and `lazo plans` commands for Slices 1–6. It does not yet provide:
 
-- a structured plan model;
-- grounded suggestions or time-bounded relationship descriptions.
+- time-bounded relationship descriptions.
 
 ## Migration strategy
 
@@ -92,8 +91,8 @@ This table is the single source of truth for roadmap progress.
 | 3 | Add Manual Context | Accepted | Available | Accepted |
 | 4 | Correct Knowledge | Accepted | Available | Accepted |
 | 5 | Ask About Relationships | Accepted | Available | Accepted |
-| 6 | Pending Plans | Awaiting Feedback | Demo ready | Pending |
-| 7 | Grounded Suggestions | Planned | Locked by Slice 6 | Pending |
+| 6 | Pending Plans | Accepted | Available | Accepted |
+| 7 | Grounded Suggestions | Awaiting Feedback | Demo ready | Pending |
 | 8 | Describe a Relationship | Planned | Locked by Slice 7 | Pending |
 
 ## Mandatory feedback protocol
@@ -688,7 +687,7 @@ lazo ask "Who is Carlos and how is he related to Juanita?" --slug sample --json
 
 ## Slice 6 — Pending Plans
 
-**Status:** Awaiting Feedback
+**Status:** Accepted
 **Dependency:** Slice 5 accepted  
 **Unlocks:** Slice 7
 
@@ -778,19 +777,19 @@ lazo plans show <plan-id> --slug sample --json
 
 | Field | Value |
 |---|---|
-| Decision | Pending |
+| Decision | Accepted |
 | Required phrase | `Slice 6 accepted` |
-| Date | — |
+| Date | 2026-08-23 |
 | Implementation commit | `79f5400`, `41f2d70`, `c2cb4a8`, `66f9e9b` |
 | Test results | 212 full tests passed; 51 focused Slice 6 tests passed |
 | Demo command | `lazo plans list --slug sample --status pending`; `lazo plans list --slug sample --status scheduled --participant Alex --json`; `lazo ask "¿Tenemos alguna actividad pendiente?" --slug sample`; `lazo plans show <plan-id> --slug sample --json` |
-| User notes | Pending-plan extraction, lifecycle evidence, read-only interfaces, deterministic timezone handling, and KG participant/location projection are ready for review |
+| User notes | User wrote exact acceptance phrase `Slice 6 accepted`; pending-plan extraction, lifecycle evidence, read-only interfaces, deterministic timezone handling, and KG participant/location projection approved |
 
 ---
 
 ## Slice 7 — Grounded Suggestions
 
-**Status:** Planned  
+**Status:** Awaiting Feedback
 **Dependency:** Slice 6 accepted  
 **Unlocks:** Slice 8
 
@@ -799,7 +798,7 @@ lazo plans show <plan-id> --slug sample --json
 Provide useful personal suggestions supported by preferences, memories, corrected knowledge,
 dates, constraints, and plans.
 
-### Planned interface — not implemented
+### Implemented interface — awaiting feedback
 
 ```bash
 lazo ask "What could I give Alex as a gift?"
@@ -846,7 +845,7 @@ target person
 - Insufficient-context and sensitive-context fixtures.
 - Confirmation-required persistence test.
 
-Planned demo:
+Demo:
 
 ```bash
 lazo ask "¿Qué podría regalarle a Alex?"
@@ -868,9 +867,9 @@ lazo ask "¿Qué podría regalarle a Alex?"
 | Required phrase | `Slice 7 accepted` |
 | Date | — |
 | Implementation commit | — |
-| Test results | — |
-| Demo command | — |
-| User notes | — |
+| Test results | 227 full tests passed; 13 focused Slice 7 tests passed |
+| Demo command | `lazo ask "¿Qué podría regalarle a Alex?" --slug sample`; `lazo ask "¿Qué podría regalarle a Alizon?" --slug abdair-e2e --json` |
+| User notes | Demo ready. Real-dataset suggestion query abstained safely when evidence was generic; user feedback required before acceptance |
 
 ---
 

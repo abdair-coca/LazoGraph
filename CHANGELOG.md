@@ -43,6 +43,10 @@
   pending-plan questions with creation/latest-transition citations.
 - Dedicated `lazograph-plans` Knowledge Graph projection with stable plan nodes and participant/
   location edges; plan status remains structured data and is excluded from relationship traversal.
+- Slice 7 grounded suggestions through `lazo ask`, with strict single-participant resolution,
+  participant-isolated source validation, correction/manual-context/active-plan evidence,
+  structured suggestions and missing-information output, deterministic offline generation, and
+  abstention for unresolved, weak, conflicting, or sensitive context.
 
 ### Changed
 
