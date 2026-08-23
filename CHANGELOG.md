@@ -4,6 +4,14 @@
 
 ### Added
 
+- Multilingual embeddings by default: LazoGraph now sets
+  `MEMPALACE_EMBEDDING_MODEL=embeddinggemma` when the user has not chosen a
+  model, so Spanish (and other non-English) chat retrieval uses the
+  multilingual `embeddinggemma-300m` ONNX embedder (cross-lingual cosine ~0.88
+  vs ~0.35 for the English-only MiniLM default). An explicit
+  `MEMPALACE_EMBEDDING_MODEL` still wins. Existing datasets built with MiniLM
+  must be re-embedded (different vector space); `diagnose.py` fails loudly on
+  the mismatch until then.
 - Packaged `lazo` entry point and Slice 1 `lazo import` command.
 - Non-mutating participant preview with exact focal-person resolution, counts, PII flags,
   duplicates, rejected system notices, and equivalent-source warnings.
@@ -52,6 +60,7 @@
   rebuilds refresh plans from active source backups; ambiguous candidates remain unresolved.
 - New datasets declare IANA `timezone` metadata (default `UTC`) for deterministic relative-date
   resolution, and plan projections fail closed when that metadata is missing or invalid.
+- The `mempalace` dependency floor is now `3.3.6` (first release with the multilingual embedder).
 
 ### Fixed
 

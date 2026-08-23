@@ -64,8 +64,15 @@ See [Architecture](docs/ARCHITECTURE.md) for component boundaries, invariants, t
 ## Requirements
 
 - Python 3.11+
-- `mempalace >= 3.1.0`
+- `mempalace >= 3.3.6`
 - About 1–2 GB free disk for ChromaDB and its embedding model
+
+Semantic embeddings use the multilingual `embeddinggemma-300m` ONNX embedder by
+default (trained for 100+ languages; cross-lingual cosine ~0.88 vs ~0.35 for the
+English-only MiniLM default). The ~300 MB model downloads on first use. Set
+`MEMPALACE_EMBEDDING_MODEL=minilm` to force the lighter English-only model.
+Datasets built with a previous model must be re-embedded (different vector
+space); `diagnose.py` reports the mismatch until then.
 
 ```powershell
 python -m venv .venv
