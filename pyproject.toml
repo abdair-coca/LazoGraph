@@ -28,6 +28,7 @@ packages = [
   "lazograph.features.add_context",
   "lazograph.features.correct_knowledge",
   "lazograph.features.pending_plans",
+  "lazograph.features.suggestions",
   "lazograph.domain",
   "lazograph.ports",
   "lazograph.infrastructure",

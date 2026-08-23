@@ -51,6 +51,7 @@ def _safe_context(context: dict[str, Any]) -> dict[str, Any]:
             "relationship_path",
             "observed_period",
             "wiki_relationship_mentions",
+            "active_plans",
         )
         if key in context
     }
@@ -80,8 +81,11 @@ def _prompt(
     ]
     return (
         "Answer only from EVIDENCE. Never treat CONTEXT metadata as proof. "
-        "Return strict JSON with keys text, citation_ids, confidence, abstained. "
+        "Return strict JSON with keys text, citation_ids, confidence, abstained, suggestions, "
+        "missing_information. suggestions and missing_information must be arrays of strings. "
         "Every factual claim must cite one or more message_id values. "
+        "Every suggestion justified by evidence must include its citation marker. "
+        "Label facts, inferences, suggestions, and missing information separately in text. "
         "Abstain when evidence is insufficient. "
         f"Answer language: {language}.\n"
         f"PARTICIPANT: {participant}\n"
@@ -102,6 +106,16 @@ def _parse_provider_json(content: str) -> ProviderOutput:
         citation_ids = tuple(str(item) for item in payload.get("citation_ids", []))
         confidence = float(payload.get("confidence", 0.0))
         abstained = bool(payload.get("abstained", False))
+        raw_suggestions = payload.get("suggestions", [])
+        raw_missing_information = payload.get("missing_information", [])
+        if not isinstance(raw_suggestions, list) or not isinstance(raw_missing_information, list):
+            raise TypeError("suggestions and missing_information must be arrays")
+        suggestions = tuple(str(item).strip() for item in raw_suggestions if str(item).strip())
+        missing_information = tuple(
+            str(item).strip()
+            for item in raw_missing_information
+            if str(item).strip()
+        )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise ProviderError("Provider returned invalid grounded-answer JSON.") from exc
     if not text:
@@ -111,6 +125,8 @@ def _parse_provider_json(content: str) -> ProviderOutput:
         citation_ids=citation_ids,
         confidence=max(0.0, min(1.0, confidence)),
         abstained=abstained,
+        suggestions=suggestions,
+        missing_information=missing_information,
     )
 
 
@@ -137,6 +153,9 @@ class LocalExtractiveProvider:
                 else f"I found insufficient evidence about {participant}."
             )
             return ProviderOutput(text, (), 0.0, abstained=True)
+
+        if context.get("answer_mode") == "suggestions":
+            return self._suggestion_output(participant, evidence, context, language)
 
         if context.get("answer_mode") == "relationship":
             graph_items = [
@@ -200,6 +219,91 @@ class LocalExtractiveProvider:
             text="\n".join(lines),
             citation_ids=tuple(item.message_id for item in selected),
             confidence=max(0.0, min(1.0, confidence)),
+        )
+
+    @staticmethod
+    def _suggestion_output(
+        participant: str,
+        evidence: Sequence[Evidence],
+        context: dict[str, Any],
+        language: str,
+    ) -> ProviderOutput:
+        """Produce deterministic, evidence-only suggestion wording without persistence."""
+        markers = " ".join(f"[{item.message_id}]" for item in evidence)
+        preference_items = [
+            item for item in evidence
+            if item.source_type in {"user_context", "user_correction"}
+            or re.search(
+                r"\b(?:like|likes|love|loves|prefer|prefers|favorite|enjoy|enjoys|gusta|encanta|prefiere|favorit[oa])\b",
+                item.excerpt,
+                re.IGNORECASE,
+            )
+        ]
+        if not preference_items:
+            text = (
+                f"No encontré contexto suficiente para sugerir un regalo para {participant}."
+                if language == "es"
+                else f"I found insufficient context to suggest a gift for {participant}."
+            )
+            return ProviderOutput(text, (), 0.0, abstained=True)
+
+        joined = " ".join(item.excerpt.casefold() for item in preference_items)
+        gift = (
+            "un regalo relacionado con el interés expresado"
+            if language == "es"
+            else "a gift connected to the stated interest"
+        )
+        if any(word in joined for word in ("book", "books", "reading", "libro", "libros", "leer")):
+            gift = "un libro o regalo relacionado con la lectura" if language == "es" else "a book or reading-related gift"
+        elif any(word in joined for word in ("coffee", "café", "cafe")):
+            gift = "café de calidad o un regalo relacionado con café" if language == "es" else "quality coffee or a café-related gift"
+        elif any(word in joined for word in ("music", "música", "guitar", "instrument")):
+            gift = "un regalo relacionado con la música" if language == "es" else "a music-related gift"
+        elif any(word in joined for word in ("paint", "painting", "art", "pintar", "arte")):
+            gift = "materiales de arte o un regalo relacionado con el arte" if language == "es" else "art supplies or an art-related gift"
+        elif any(word in joined for word in ("travel", "viaj", "trip", "viaje")):
+            gift = "un regalo práctico relacionado con viajes" if language == "es" else "a practical travel-related gift"
+
+        plan_items = [item for item in evidence if item.record_kind == "plan_transition"]
+        correction_items = [item for item in evidence if item.source_type == "user_correction"]
+        if language == "es":
+            facts = "Hechos conocidos:\n" + "\n".join(
+                f"- {item.excerpt} [{item.message_id}]" for item in preference_items
+            )
+            inference = (
+                f"Inferencia:\n- Un regalo relacionado con esos intereses puede ser pertinente. {markers}"
+            )
+            suggestion = f"Sugerencia:\n- Considera {gift}. {markers}"
+            if plan_items:
+                suggestion += f" El plan activo también puede orientar el momento o contexto: {plan_items[0].excerpt} [{plan_items[0].message_id}]"
+            if correction_items:
+                suggestion += f" Se respeta la corrección activa y no se usa como preferencia lo retractado. {markers}"
+            missing = (
+                "Información faltante:\n- Presupuesto, ocasión y restricciones personales."
+            )
+        else:
+            facts = "Known facts:\n" + "\n".join(
+                f"- {item.excerpt} [{item.message_id}]" for item in preference_items
+            )
+            inference = (
+                f"Inference:\n- A gift related to those stated interests may be relevant. {markers}"
+            )
+            suggestion = f"Suggestion:\n- Consider {gift}. {markers}"
+            if plan_items:
+                suggestion += f" The active plan may also guide timing or context: {plan_items[0].excerpt} [{plan_items[0].message_id}]"
+            if correction_items:
+                suggestion += f" The active correction is respected; retracted knowledge is not used as a preference. {markers}"
+            missing = "Missing information:\n- Budget, occasion, and personal constraints."
+        text = "\n".join((facts, inference, suggestion, missing))
+        return ProviderOutput(
+            text=text,
+            citation_ids=tuple(item.message_id for item in evidence),
+            confidence=min(item.score for item in evidence),
+            suggestions=(suggestion, ),
+            missing_information=(
+                "presupuesto, ocasión y restricciones personales"
+                if language == "es" else "budget, occasion, and personal constraints",
+            ),
         )
 
 

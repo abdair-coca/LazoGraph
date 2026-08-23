@@ -31,6 +31,8 @@ class ProviderOutput:
     citation_ids: tuple[str, ...]
     confidence: float
     abstained: bool = False
+    suggestions: tuple[str, ...] = ()
+    missing_information: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,8 @@ class Answer:
     abstained: bool = False
     facts: tuple[str, ...] = ()
     inferences: tuple[str, ...] = ()
+    suggestions: tuple[str, ...] = ()
+    missing_information: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -54,4 +58,6 @@ class Answer:
             "abstained": self.abstained,
             "facts": list(self.facts),
             "inferences": list(self.inferences),
+            "suggestions": list(self.suggestions),
+            "missing_information": list(self.missing_information),
         }

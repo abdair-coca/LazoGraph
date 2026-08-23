@@ -9,6 +9,7 @@ from lazograph.config import ConfigurationError, knowledge_root, resolve_dataset
 from lazograph.domain.identity import IdentityResolutionError
 from lazograph.features.ask_person.service import GroundingError, answer_about_person
 from lazograph.features.ask_relationship import answer_about_relationship
+from lazograph.features.suggestions import answer_suggestion_question, is_suggestion_question
 from lazograph.features.pending_plans import (
     PlanProjectionError,
     answer_plan_question,
@@ -339,6 +340,14 @@ def _print_answer(answer, *, debug: bool) -> None:
         print("Retrieval:")
         for key, value in answer.retrieval_summary.items():
             print(f"  {key}: {value}")
+    if answer.suggestions:
+        print("Suggestions:")
+        for suggestion in answer.suggestions:
+            print(f"  {suggestion}")
+    if answer.missing_information:
+        print("Missing information:")
+        for item in answer.missing_information:
+            print(f"  {item}")
 
 
 def _run_ask(args: argparse.Namespace) -> int:
@@ -362,6 +371,14 @@ def _run_ask(args: argparse.Namespace) -> int:
             )
         elif is_plan_question(args.question):
             answer = answer_plan_question(dataset_dir, args.question)
+        elif is_suggestion_question(args.question):
+            answer = answer_suggestion_question(
+                dataset_dir,
+                args.question,
+                provider,
+                limit=args.limit,
+                evidence_budget=args.evidence_budget,
+            )
         else:
             answer = answer_about_relationship(
                 dataset_dir,
