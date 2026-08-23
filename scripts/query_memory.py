@@ -7,6 +7,13 @@ import os
 import sys
 from pathlib import Path
 
+try:
+    from .runtime import configure_safe_output
+except ImportError:
+    from runtime import configure_safe_output
+
+configure_safe_output()
+
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
     Path.home() / '.openpersona' / 'knowledge',
