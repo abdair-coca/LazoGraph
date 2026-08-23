@@ -866,7 +866,7 @@ lazo ask "¿Qué podría regalarle a Alex?"
 | Decision | Pending |
 | Required phrase | `Slice 7 accepted` |
 | Date | — |
-| Implementation commit | — |
+| Implementation commit | `be9df6c` |
 | Test results | 227 full tests passed; 13 focused Slice 7 tests passed |
 | Demo command | `lazo ask "¿Qué podría regalarle a Alex?" --slug sample`; `lazo ask "¿Qué podría regalarle a Alizon?" --slug abdair-e2e --json` |
 | User notes | Demo ready. Real-dataset suggestion query abstained safely when evidence was generic; user feedback required before acceptance |
