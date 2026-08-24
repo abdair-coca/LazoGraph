@@ -12,8 +12,6 @@ try:
 except ImportError:
     from runtime import configure_safe_output
 
-configure_safe_output()
-
 KNOWLEDGE_ROOT = Path(os.environ.get(
     'OPENPERSONA_KNOWLEDGE',
     Path.home() / '.openpersona' / 'knowledge',
@@ -21,6 +19,7 @@ KNOWLEDGE_ROOT = Path(os.environ.get(
 
 
 def main():
+    configure_safe_output()
     parser = argparse.ArgumentParser(description='Search persona memories semantically')
     parser.add_argument('--slug', required=True, help='Persona dataset slug')
     parser.add_argument('--query', required=True, help='Natural-language semantic query')
@@ -102,15 +101,28 @@ def search_memory(
 ) -> list[dict]:
     from mempalace.palace import get_collection
 
-    collection = get_collection(
-        str(dataset_dir / '.mempalace' / 'palace'),
-        create=False,
-    )
+    palace_dir = dataset_dir / '.mempalace' / 'palace'
     query_args = {
-        'query_texts': [query],
         'n_results': limit,
         'include': ['documents', 'metadatas', 'distances'],
     }
+    try:
+        collection = get_collection(str(palace_dir), create=False)
+        query_args['query_texts'] = [query]
+    except ValueError as exc:
+        # Chroma 1.5 can retain its legacy/default EF name after MemPalace
+        # re-embeds vectors with the configured model. Bypass EF validation,
+        # but still embed query with current model explicitly.
+        if 'embedding function conflict' not in str(exc).casefold():
+            raise
+        import chromadb
+        from mempalace.config import get_configured_collection_name
+        from mempalace.embedding import get_embedding_function
+
+        collection = chromadb.PersistentClient(path=str(palace_dir)).get_collection(
+            get_configured_collection_name()
+        )
+        query_args['query_embeddings'] = get_embedding_function()(input=[query])
     if participant:
         query_args['where'] = {'sender': participant}
     result = collection.query(

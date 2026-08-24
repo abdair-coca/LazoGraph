@@ -338,6 +338,44 @@ class TestMemPalaceCompatibility(unittest.TestCase):
         self.assertEqual(results[0]['content'], 'A durable memory.')
         self.assertEqual(results[0]['metadata']['sender'], 'Sam Example')
 
+    def test_semantic_search_bypasses_chroma_ef_conflict_with_explicit_query_embedding(self):
+        raw_collection = FakeCollection()
+        raw_collection.query_result = {
+            'ids': [['sam-one']],
+            'documents': [['A durable memory.']],
+            'metadatas': [[{'sender': 'Sam Example'}]],
+            'distances': [[0.1]],
+        }
+        chromadb = types.ModuleType('chromadb')
+        chromadb.PersistentClient = lambda path: types.SimpleNamespace(
+            get_collection=lambda name: raw_collection,
+        )
+        config = types.ModuleType('mempalace.config')
+        config.get_configured_collection_name = lambda: 'mempalace_drawers'
+        embedding = types.ModuleType('mempalace.embedding')
+        embedding.get_embedding_function = lambda: (lambda input: [[0.1, 0.2]])
+        self.fake.palace.get_collection = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError('embedding function conflict')
+        )
+        modules = {
+            **self.fake.modules,
+            'chromadb': chromadb,
+            'mempalace.config': config,
+            'mempalace.embedding': embedding,
+        }
+        with patch.dict(sys.modules, modules):
+            results = query_memory.search_memory(
+                self.dataset,
+                'durable',
+                participant='Sam Example',
+                limit=3,
+            )
+
+        self.assertEqual(results[0]['content'], 'A durable memory.')
+        query = raw_collection.queries[0]
+        self.assertEqual(query['query_embeddings'], [[0.1, 0.2]])
+        self.assertEqual(query['where'], {'sender': 'Sam Example'})
+
     def test_vector_rebuild_prunes_ids_missing_from_authoritative_sources(self):
         message = {
             'role': 'assistant',
