@@ -1,7 +1,6 @@
 # LazoGraph Vertical Slice Roadmap
 
-> **Gated delivery document.** Slices 1–6 are accepted. Slice 7 is awaiting feedback. Slice 8 remains
-> planned and is not implemented. Existing
+> **Gated delivery document.** Slices 1–8 are accepted. Existing
 > `scripts/*.py` commands remain supported compatibility interfaces.
 
 ## Purpose
@@ -35,9 +34,9 @@ LazoGraph already provides:
 - authentic training exports with PII policies.
 
 The current runtime provides packaged `lazo import`, `lazo ask`, `lazo context`, `lazo correct`,
-`lazo corrections`, and `lazo plans` commands for Slices 1–6. It does not yet provide:
+`lazo corrections`, and `lazo plans` commands for Slices 1–8. It now also provides:
 
-- time-bounded relationship descriptions.
+- time-bounded relationship descriptions with evidence/inference separation and safe abstention.
 
 ## Migration strategy
 
@@ -92,8 +91,8 @@ This table is the single source of truth for roadmap progress.
 | 4 | Correct Knowledge | Accepted | Available | Accepted |
 | 5 | Ask About Relationships | Accepted | Available | Accepted |
 | 6 | Pending Plans | Accepted | Available | Accepted |
-| 7 | Grounded Suggestions | Awaiting Feedback | Demo ready | Pending |
-| 8 | Describe a Relationship | Planned | Locked by Slice 7 | Pending |
+| 7 | Grounded Suggestions | Accepted | Available | Accepted |
+| 8 | Describe a Relationship | Accepted | Available | Accepted |
 
 ## Mandatory feedback protocol
 
@@ -205,7 +204,7 @@ Plan status and dates are structured fields, not freeform graph entities.
 
 ## Slice 1 — Import Chat
 
-**Status:** Accepted  
+**Status:** Accepted
 **Dependency:** Current ingestion baseline  
 **Unlocks:** Slice 2
 
@@ -789,8 +788,8 @@ lazo plans show <plan-id> --slug sample --json
 
 ## Slice 7 — Grounded Suggestions
 
-**Status:** Awaiting Feedback
-**Dependency:** Slice 6 accepted  
+**Status:** Accepted
+**Dependency:** Slice 6 accepted
 **Unlocks:** Slice 8
 
 ### Goal
@@ -863,20 +862,20 @@ lazo ask "¿Qué podría regalarle a Alex?"
 
 | Field | Value |
 |---|---|
-| Decision | Pending |
+| Decision | Accepted |
 | Required phrase | `Slice 7 accepted` |
-| Date | — |
+| Date | 2026-08-23 |
 | Implementation commit | `be9df6c` |
 | Test results | 227 full tests passed; 13 focused Slice 7 tests passed |
 | Demo command | `lazo ask "¿Qué podría regalarle a Alex?" --slug sample`; `lazo ask "¿Qué podría regalarle a Alizon?" --slug abdair-e2e --json` |
-| User notes | Demo ready. Real-dataset suggestion query abstained safely when evidence was generic; user feedback required before acceptance |
+| User notes | User wrote exact acceptance phrase `Slice 7 accepted`; demo-ready suggestion routing, grounded evidence, correction/plan handling, and safe abstention approved |
 
 ---
 
 ## Slice 8 — Describe a Relationship
 
-**Status:** Planned  
-**Dependency:** Slice 7 accepted  
+**Status:** Accepted
+**Dependency:** Slice 7 accepted
 **Unlocks:** Roadmap completion
 
 ### Goal
@@ -884,7 +883,7 @@ lazo ask "¿Qué podría regalarle a Alex?"
 Produce careful, time-bounded relationship summaries that distinguish observation from
 interpretation.
 
-### Planned interface — not implemented
+### Implemented interface — demo ready
 
 ```bash
 lazo ask "How would you describe my relationship with Alex?"
@@ -951,13 +950,13 @@ lazo ask "¿Cómo describirías mi relación con Alex?"
 
 | Field | Value |
 |---|---|
-| Decision | Pending |
+| Decision | Accepted |
 | Required phrase | `Slice 8 accepted` |
-| Date | — |
-| Implementation commit | — |
-| Test results | — |
-| Demo command | — |
-| User notes | — |
+| Date | 2026-08-23 |
+| Implementation commit | Uncommitted worktree; implementation present |
+| Test results | 7 focused Slice 8 tests pass; 63 related regression tests pass; full discovery blocked by existing Windows Chroma/ONNX memory failure in `test_correct_knowledge` |
+| Demo command | `lazo ask "¿Cómo describirías mi relación con Alex?" --slug sample`; `lazo ask "How would you describe my relationship with Alex?" --slug sample --json` |
+| User notes | User wrote exact acceptance phrase `Slice 8 accepted`; roadmap complete |
 
 ---
 

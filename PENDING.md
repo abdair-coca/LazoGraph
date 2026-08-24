@@ -31,11 +31,19 @@
   implementation commits (`79f5400`, `41f2d70`, `c2cb4a8`, `66f9e9b`) passed 212 full tests,
   including 51 focused Slice 6 tests. User acceptance recorded 2026-08-23; Slice 7 unlocked.
 
-- [ ] **Slice 7 — Grounded Suggestions: Awaiting Feedback.** Suggestion answers combine participant
+- [x] **Slice 7 — Grounded Suggestions: Accepted.** Suggestion answers combine participant
   preferences, memories, corrections, dates, constraints, and plans while separating facts,
   inferences, suggestions, and missing information. No suggestion persists automatically. Demo ready;
-  227 full tests pass, including 13 focused Slice 7 tests. Awaiting user feedback and exact phrase
-  `Slice 7 accepted`.
+  227 full tests pass, including 13 focused Slice 7 tests. User wrote exact acceptance phrase
+  `Slice 7 accepted` on 2026-08-23.
+
+- [x] **Slice 8 — Describe a Relationship: Accepted.** Time-bounded relationship descriptions
+  report persisted-message coverage, separate observations from interpretations, balance positive and
+  negative signals, expose contradictions and active corrections, cite factual claims, isolate
+  provider evidence to the requested participants, and abstain from diagnostic language. Seven
+  focused Slice 8 tests pass; 63 related regression tests pass. Full discovery was attempted but hit
+  an existing Windows Chroma/ONNX memory failure in `test_correct_knowledge`. User wrote exact
+  acceptance phrase `Slice 8 accepted` on 2026-08-23. Roadmap complete.
 
 The [Vertical Slice Roadmap](docs/VERTICAL_SLICES.md) is the source of truth for all eight slices,
 their dependencies, acceptance criteria, feedback checklists, and mandatory approval records.
