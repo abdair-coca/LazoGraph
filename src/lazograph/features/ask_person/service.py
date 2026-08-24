@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from lazograph.domain.answer import Answer, Evidence
-from lazograph.domain.identity import resolve_participant
+from lazograph.domain.identity import load_profiles, resolve_participant
 from lazograph.ports.llm import LLMProvider
 from scripts import ingest, query_kg, query_memory
 
@@ -41,6 +41,10 @@ PREFERENCE_EVIDENCE = re.compile(
     r"mi\s+favorit[oa]|i\s+like\b|i\s+love\b|my\s+favou?rite)\b",
     re.IGNORECASE,
 )
+RELATIONSHIP_WORDS = {
+    "relationship", "relation", "related", "connected", "relación", "relacionado",
+    "conectado", "vínculo", "vinculo",
+}
 NEGATIVE_PREFERENCE = re.compile(
     r"\b(?:no\s+me\s+gust\w*|no\s+me\s+encant\w*|i\s+(?:do\s+not|don't)\s+like)\b",
     re.IGNORECASE,
@@ -50,6 +54,27 @@ NEGATIVE_PREFERENCE = re.compile(
 def detect_language(question: str) -> str:
     words = {word.casefold() for word in WORD_PATTERN.findall(question)}
     return "es" if "¿" in question or words & SPANISH_MARKERS else "en"
+
+
+def resolve_question_participant(dataset_dir: Path, question: str) -> dict | None:
+    """Resolve one participant explicitly named in a non-relationship question."""
+    normalized = question.casefold()
+    words = {word.casefold() for word in WORD_PATTERN.findall(question)}
+    if words & RELATIONSHIP_WORDS:
+        return None
+    matches: dict[str, dict] = {}
+    for profile in load_profiles(dataset_dir):
+        canonical = str(profile.get("name", "")).strip()
+        aliases = profile.get("aliases", [])
+        names = [canonical, *(aliases if isinstance(aliases, list) else [])]
+        for alias in names:
+            value = str(alias).strip()
+            if value and re.search(rf"(?<!\w){re.escape(value.casefold())}(?!\w)", normalized):
+                matches[canonical] = profile
+                break
+    if len(matches) > 1:
+        return None
+    return next(iter(matches.values()), None)
 
 
 def _terms(text: str) -> set[str]:
@@ -86,7 +111,7 @@ def _lexical_overlap(question_terms: set[str], content_terms: set[str]) -> int:
     return matches
 
 
-def _source_index(dataset_dir: Path, participant: str) -> tuple[dict[str, dict], dict[tuple, dict]]:
+def _source_index(dataset_dir: Path, participant: str | None) -> tuple[dict[str, dict], dict[tuple, dict]]:
     by_vector_id: dict[str, dict] = {}
     by_fallback: dict[tuple, dict] = {}
     for source_path in sorted(dataset_dir.joinpath("sources").glob("*.jsonl")):
@@ -97,7 +122,7 @@ def _source_index(dataset_dir: Path, participant: str) -> tuple[dict[str, dict],
                 except (json.JSONDecodeError, TypeError):
                     continue
                 sender = str(message.get("metadata", {}).get("sender", "")).strip()
-                if sender.casefold() != participant.casefold():
+                if participant and sender.casefold() != participant.casefold():
                     continue
                 record = {
                     "message": message,
@@ -120,7 +145,7 @@ def _source_index(dataset_dir: Path, participant: str) -> tuple[dict[str, dict],
 def retrieve_evidence(
     dataset_dir: Path,
     question: str,
-    participant: str,
+    participant: str | None,
     *,
     limit: int = 5,
     evidence_budget: int = 2500,
@@ -135,7 +160,7 @@ def retrieve_evidence(
         limit=candidate_limit,
     )
     by_vector_id, by_fallback = _source_index(dataset_dir, participant)
-    question_terms = _topic_terms(question, participant)
+    question_terms = _topic_terms(question, participant or "")
     question_words = {word.casefold() for word in WORD_PATTERN.findall(question)}
     preference_intent = bool(question_words & PREFERENCE_WORDS)
     ranked = []
@@ -147,7 +172,7 @@ def retrieve_evidence(
         if not isinstance(metadata, dict):
             metadata = {}
         sender = str(metadata.get("sender", "")).strip()
-        if sender.casefold() != participant.casefold():
+        if participant and sender.casefold() != participant.casefold():
             rejected_sender += 1
             continue
         record = by_vector_id.get(str(result.get("id", "")))
@@ -201,7 +226,7 @@ def retrieve_evidence(
     ranked.sort(key=lambda item: (-item[0], -item[1], item[3].message_id))
     eligible = [
         item for item in ranked
-        if (not question_terms or item[1] > 0)
+        if (not question_terms or item[1] > 0 or participant is None)
         and (not preference_intent or item[2])
     ]
     selected: list[Evidence] = []
@@ -436,4 +461,65 @@ def answer_about_person(
             "kg_relationship_types": len(context["relationship_types"]),
             "wiki_pages": len(context["wiki_pages"]),
         },
+    )
+
+
+def answer_about_dataset(
+    dataset_dir: Path,
+    question: str,
+    provider: LLMProvider,
+    *,
+    limit: int = 5,
+    evidence_budget: int = 2500,
+    memory_search: MemorySearch = query_memory.search_memory,
+) -> Answer:
+    """Answer questions that do not target one participant or one feature slice."""
+    language = detect_language(question)
+    evidence, summary = retrieve_evidence(
+        dataset_dir,
+        question,
+        None,
+        limit=limit,
+        evidence_budget=evidence_budget,
+        memory_search=memory_search,
+    )
+    summary = {
+        **summary,
+        "provider": provider.name,
+        "hosted": provider.hosted,
+        "answer_mode": "general",
+    }
+    if not evidence or max(item.score for item in evidence) < 0.42:
+        text = (
+            "No encontré evidencia suficiente en la conversación."
+            if language == "es"
+            else "I found insufficient evidence in the conversation."
+        )
+        return Answer(text, (), 0.0, (), {**summary, "abstention_reason": "insufficient_relevant_evidence"}, abstained=True)
+
+    subject = "la conversación" if language == "es" else "the conversation"
+    output = provider.generate(
+        question,
+        subject,
+        evidence,
+        {"answer_mode": "general"},
+        language=language,
+    )
+    if output.abstained:
+        return Answer(
+            output.text,
+            (),
+            0.0,
+            (),
+            {**summary, "abstention_reason": "provider_abstained"},
+            abstained=True,
+        )
+    citations = _validate_output(output, evidence)
+    entities = tuple(dict.fromkeys(item.sender for item in citations if item.sender))
+    return Answer(
+        output.text,
+        citations,
+        max(0.0, min(1.0, output.confidence)),
+        entities,
+        {**summary, "selected_results": len(citations)},
     )

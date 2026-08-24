@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 
 from lazograph.config import ConfigurationError, knowledge_root, resolve_dataset
 from lazograph.domain.identity import IdentityResolutionError
-from lazograph.features.ask_person.service import GroundingError, answer_about_person
+from lazograph.features.ask_person.service import (
+    GroundingError,
+    answer_about_dataset,
+    answer_about_person,
+    resolve_question_participant,
+)
 from lazograph.features.ask_relationship import answer_about_relationship
+from lazograph.features.describe_relationship import (
+    answer_describe_relationship,
+    is_relationship_description_question,
+)
 from lazograph.features.suggestions import answer_suggestion_question, is_suggestion_question
 from lazograph.features.pending_plans import (
     PlanProjectionError,
@@ -350,6 +360,16 @@ def _print_answer(answer, *, debug: bool) -> None:
             print(f"  {item}")
 
 
+def _looks_like_relationship_question(question: str) -> bool:
+    return bool(re.search(
+        r"\b(?:relationship|relation|related|connected|relación|relacionado|"
+        r"conectado|vínculo|vinculo|pareja|amigo|amiga|hermano|hermana|"
+        r"colleague|coworker|parent|child|manager|jefe|familia)\b",
+        question,
+        re.IGNORECASE,
+    ))
+
+
 def _run_ask(args: argparse.Namespace) -> int:
     if args.limit < 1:
         print("Ask rejected: --limit must be at least 1.", file=sys.stderr)
@@ -379,14 +399,41 @@ def _run_ask(args: argparse.Namespace) -> int:
                 limit=args.limit,
                 evidence_budget=args.evidence_budget,
             )
-        else:
-            answer = answer_about_relationship(
+        elif is_relationship_description_question(args.question):
+            answer = answer_describe_relationship(
                 dataset_dir,
                 args.question,
                 provider,
                 limit=args.limit,
                 evidence_budget=args.evidence_budget,
             )
+        else:
+            mentioned = resolve_question_participant(dataset_dir, args.question)
+            if mentioned is not None:
+                answer = answer_about_person(
+                    dataset_dir,
+                    args.question,
+                    str(mentioned["name"]),
+                    provider,
+                    limit=args.limit,
+                    evidence_budget=args.evidence_budget,
+                )
+            elif _looks_like_relationship_question(args.question):
+                answer = answer_about_relationship(
+                    dataset_dir,
+                    args.question,
+                    provider,
+                    limit=args.limit,
+                    evidence_budget=args.evidence_budget,
+                )
+            else:
+                answer = answer_about_dataset(
+                    dataset_dir,
+                    args.question,
+                    provider,
+                    limit=args.limit,
+                    evidence_budget=args.evidence_budget,
+                )
     except (
         ConfigurationError,
         IdentityResolutionError,

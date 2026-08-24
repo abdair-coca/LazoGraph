@@ -6,6 +6,8 @@ import os
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,7 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 from lazograph.cli import main
-from lazograph.domain.answer import Evidence, ProviderOutput
+from lazograph.domain.answer import Answer, Evidence, ProviderOutput
 from lazograph.features.ask_person.service import GroundingError, answer_about_person
 from lazograph.infrastructure.llm import (
     HostedProvider,
@@ -368,6 +370,36 @@ class TestHostedProviderPolicy(unittest.TestCase):
 
 
 class TestAskCLI(unittest.TestCase):
+    def test_single_named_person_question_routes_to_person_answer(self):
+        answer = Answer("person", (), 1.0, ("Alizon",))
+        with (
+            patch("lazograph.cli.resolve_dataset", return_value=Path("dataset")),
+            patch("lazograph.cli.resolve_question_participant", return_value={"name": "Alizon"}),
+            patch("lazograph.cli.answer_about_person", return_value=answer) as person_route,
+            patch("lazograph.cli.answer_about_relationship") as relationship_route,
+            redirect_stdout(StringIO()),
+        ):
+            result = main(["ask", "¿Qué cosas le gustan a Alizon?", "--slug", "sample"])
+
+        self.assertEqual(result, 0)
+        person_route.assert_called_once()
+        relationship_route.assert_not_called()
+
+    def test_general_question_routes_to_dataset_answer(self):
+        answer = Answer("Facts", (), 1.0, ())
+        with (
+            patch("lazograph.cli.resolve_dataset", return_value=Path("dataset")),
+            patch("lazograph.cli.resolve_question_participant", return_value=None),
+            patch("lazograph.cli.answer_about_dataset", return_value=answer) as general_route,
+            patch("lazograph.cli.answer_about_relationship") as relationship_route,
+            redirect_stdout(StringIO()),
+        ):
+            result = main(["ask", "¿De qué hablamos?", "--slug", "sample"])
+
+        self.assertEqual(result, 0)
+        general_route.assert_called_once()
+        relationship_route.assert_not_called()
+
     def test_provider_failure_returns_clear_nonzero_exit(self):
         with (
             patch("lazograph.cli.resolve_dataset", return_value=Path("dataset")),

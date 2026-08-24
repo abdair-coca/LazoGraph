@@ -52,6 +52,10 @@ def _safe_context(context: dict[str, Any]) -> dict[str, Any]:
             "observed_period",
             "wiki_relationship_mentions",
             "active_plans",
+            "evidence_coverage",
+            "positive_evidence_count",
+            "negative_evidence_count",
+            "contradictory_evidence",
         )
         if key in context
     }
@@ -194,6 +198,39 @@ class LocalExtractiveProvider:
                 text=text,
                 citation_ids=tuple(item.message_id for item in graph_items),
                 confidence=min(item.score for item in graph_items),
+            )
+
+        if context.get("answer_mode") == "relationship_description":
+            markers = " ".join(f"[{item.message_id}]" for item in evidence)
+            positive = int(context.get("positive_evidence_count", 0) or 0)
+            negative = int(context.get("negative_evidence_count", 0) or 0)
+            contradiction = bool(context.get("contradictory_evidence"))
+            if language == "es":
+                balance = (
+                    f"Se observan señales positivas ({positive}) y negativas ({negative}), "
+                    "por lo que la evidencia es mixta."
+                    if contradiction
+                    else f"Se observan señales positivas ({positive}) y negativas ({negative})."
+                )
+                text = (
+                    "Interpretación prudente: la relación muestra patrones observables, "
+                    f"no una evaluación clínica ni una etiqueta absoluta. {balance} {markers}"
+                )
+            else:
+                balance = (
+                    f"Positive ({positive}) and negative ({negative}) signals are both observed, "
+                    "so the evidence is mixed."
+                    if contradiction
+                    else f"Positive ({positive}) and negative ({negative}) signals are observed."
+                )
+                text = (
+                    "Cautious interpretation: the relationship shows observable patterns, "
+                    f"not a clinical assessment or absolute label. {balance} {markers}"
+                )
+            return ProviderOutput(
+                text=text,
+                citation_ids=tuple(item.message_id for item in evidence),
+                confidence=min(item.score for item in evidence),
             )
 
         selected = tuple(evidence[:3])
