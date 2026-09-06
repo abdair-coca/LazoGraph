@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LazoGraph · MVP local</title>
+  <style>
+    :root {
+      --canvas: #f5f2ed;
+      --paper: #fffdfa;
+      --paper-soft: #fbf8f3;
+      --ink: #17252f;
+      --ink-muted: #6b7478;
+      --line: #e5e0d8;
+      --line-strong: #d7d0c6;
+      --teal: #347f78;
+      --teal-deep: #24655f;
+      --teal-soft: #e3f0ed;
+      --amber: #b27a2a;
+      --amber-soft: #fff4df;
+      --nav: #17252f;
+      --nav-muted: #94a3a7;
+      --shadow: 0 14px 40px rgba(31, 42, 44, .055);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { margin: 0; min-height: 100%; }
+
+    body {
+      min-width: 1120px;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      letter-spacing: -.01em;
+    }
+
+    button, input { font: inherit; }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      min-height: 1024px;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-height: 1024px;
+      padding: 28px 18px 20px;
+      background: var(--nav);
+      color: #f7f5f0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 0 12px;
+      color: #fffdfa;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -.035em;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 1px solid rgba(175, 225, 217, .26);
+      border-radius: 10px;
+      background: #21423f;
+      color: #a5d4cc;
+    }
+
+    .brand-mark svg { width: 17px; height: 17px; }
+
+    .nav-label {
+      margin: 48px 13px 12px;
+      color: #718087;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .nav-list { display: grid; gap: 5px; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 46px;
+      padding: 0 13px;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      color: var(--nav-muted);
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .nav-item svg { width: 18px; height: 18px; stroke-width: 1.7; }
+
+    .nav-item.active {
+      border-color: rgba(147, 210, 201, .13);
+      background: #22343e;
+      color: #f5fbf9;
+      box-shadow: inset 3px 0 0 #6eb9ad;
+    }
+
+    .nav-item.active svg { color: #92d0c5; }
+
+    .sidebar-spacer { flex: 1; }
+
+    .privacy-note {
+      margin: 0 8px 16px;
+      padding: 16px 14px;
+      border: 1px solid rgba(150, 185, 184, .17);
+      border-radius: 11px;
+      background: rgba(255, 255, 255, .035);
+    }
+
+    .privacy-note .mini-icon {
+      display: grid;
+      width: 25px;
+      height: 25px;
+      margin-bottom: 12px;
+      place-items: center;
+      border-radius: 7px;
+      background: rgba(99, 176, 164, .14);
+      color: #9dd3ca;
+    }
+
+    .privacy-note svg { width: 14px; height: 14px; }
+
+    .privacy-note strong {
+      display: block;
+      margin-bottom: 5px;
+      color: #f3f8f5;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .privacy-note span {
+      display: block;
+      color: #85979a;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .sidebar-footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      color: #78888d;
+      font-size: 11px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #69b9a9;
+      box-shadow: 0 0 0 3px rgba(105, 185, 169, .12);
+    }
+
+    .main {
+      min-width: 0;
+      padding: 0 38px 32px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 80px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--ink-muted);
+      font-size: 12px;
+    }
+
+    .breadcrumb strong { color: var(--ink); font-weight: 600; }
+    .breadcrumb svg { width: 13px; height: 13px; color: #a1a6a4; }
+
+    .topbar-right { display: flex; align-items: center; gap: 22px; }
+
+    .local-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--teal-deep);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .local-pill svg { width: 15px; height: 15px; }
+
+    .account {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-left: 21px;
+      border-left: 1px solid var(--line);
+    }
+
+    .avatar {
+      display: grid;
+      width: 31px;
+      height: 31px;
+      place-items: center;
+      border-radius: 50%;
+      background: #d5e2de;
+      color: #2d625b;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .account span { color: #445259; font-size: 12px; font-weight: 600; }
+
+    .page-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 32px 0 23px;
+    }
+
+    .eyebrow {
+      margin: 0 0 9px;
+      color: var(--teal);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 36px;
+      font-weight: 400;
+      letter-spacing: -.045em;
+      line-height: 1.02;
+    }
+
+    .heading-copy { margin-top: 9px; color: var(--ink-muted); font-size: 13px; }
+
+    .dataset-select {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 226px;
+      padding: 10px 13px;
+      border: 1px solid var(--line-strong);
+      border-radius: 9px;
+      background: rgba(255, 253, 250, .62);
+    }
+
+    .dataset-select svg { width: 17px; height: 17px; color: var(--teal); }
+    .dataset-select small { display: block; margin-bottom: 3px; color: var(--ink-muted); font-size: 10px; }
+    .dataset-select strong { display: block; color: var(--ink); font-size: 13px; font-weight: 650; }
+    .dataset-select .chevron { width: 14px; height: 14px; margin-left: auto; color: #8d9697; }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 27px;
+    }
+
+    .metric {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      min-height: 86px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: rgba(255, 253, 250, .72);
+    }
+
+    .metric-icon {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      place-items: center;
+      border-radius: 9px;
+      background: #edf3ef;
+      color: var(--teal);
+    }
+
+    .metric:nth-child(2) .metric-icon { background: #f2eee8; color: #94775b; }
+    .metric:nth-child(3) .metric-icon { background: #e9f1f2; color: #4e7c86; }
+    .metric:nth-child(4) .metric-icon { background: #f1ede5; color: #967442; }
+    .metric-icon svg { width: 17px; height: 17px; }
+    .metric strong { display: block; font-size: 20px; font-weight: 650; letter-spacing: -.04em; }
+    .metric span { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 11px; }
+
+    .section-kicker {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .section-kicker h2 { color: #37454a; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .section-kicker span { color: #969d9d; font-size: 11px; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(310px, .8fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+      box-shadow: var(--shadow);
+    }
+
+    .ask-panel { position: relative; min-height: 559px; overflow: hidden; }
+
+    .ask-motif {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 275px;
+      height: 180px;
+      opacity: .48;
+      pointer-events: none;
+    }
+
+    .ask-header {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding: 27px 29px 20px;
+    }
+
+    .ask-title { color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 24px; font-weight: 400; letter-spacing: -.035em; }
+    .ask-subtitle { margin-top: 6px; color: var(--ink-muted); font-size: 12px; }
+
+    .provider-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border: 1px solid #cde2dd;
+      border-radius: 999px;
+      background: #f1f8f5;
+      color: var(--teal-deep);
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .provider-badge svg { width: 13px; height: 13px; }
+
+    .question-wrap { padding: 0 29px; }
+
+    .question-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 54px;
+      padding: 0 16px;
+      border: 1px solid #bbd6d0;
+      border-radius: 9px;
+      background: #f7fbfa;
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 550;
+      box-shadow: 0 0 0 3px rgba(52, 127, 120, .06);
+    }
+
+    .question-box svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--teal); }
+
+    .answer-area { padding: 24px 29px 0; }
+    .answer-label { color: var(--ink-muted); font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+
+    .answer-copy {
+      max-width: 720px;
+      margin-top: 13px;
+      color: #26363c;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 20px;
+      line-height: 1.42;
+      letter-spacing: -.025em;
+    }
+
+    .answer-copy em { color: var(--teal-deep); font-style: normal; }
+
+    .confidence-row {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      max-width: 640px;
+      margin-top: 20px;
+    }
+
+    .confidence-row > span { color: var(--ink-muted); font-size: 11px; white-space: nowrap; }
+    .confidence-track { height: 5px; flex: 1; overflow: hidden; border-radius: 999px; background: #e2e7e4; }
+    .confidence-track i { display: block; width: 92%; height: 100%; border-radius: inherit; background: var(--teal); }
+    .confidence-value { color: var(--teal-deep) !important; font-weight: 700; }
+
+    .evidence {
+      margin: 28px 29px 0;
+      padding-top: 19px;
+      border-top: 1px solid var(--line);
+    }
+
+    .evidence-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .evidence-head strong { font-size: 12px; font-weight: 700; }
+    .evidence-head span { color: var(--ink-muted); font-size: 10px; }
+
+    .citation {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) 15px;
+      gap: 11px;
+      align-items: center;
+      min-height: 57px;
+      padding: 9px 11px;
+      border-top: 1px solid #eeeae4;
+    }
+
+    .citation:first-of-type { border-top: 0; }
+
+    .citation-index {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--teal-soft);
+      color: var(--teal-deep);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .citation-main { min-width: 0; }
+    .citation-main strong { display: block; overflow: hidden; color: #3b4a4e; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .citation-main span { display: block; overflow: hidden; margin-top: 4px; color: var(--ink-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .citation > svg { width: 14px; height: 14px; color: #9aa3a1; }
+
+    .side-stack { display: grid; gap: 16px; }
+
+    .import-panel { padding: 23px 22px 21px; }
+    .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; }
+    .panel-heading h3 { color: var(--ink); font-size: 14px; font-weight: 700; }
+    .panel-heading p { margin-top: 5px; color: var(--ink-muted); font-size: 11px; line-height: 1.4; }
+    .panel-heading > svg { width: 18px; height: 18px; color: var(--teal); }
+
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 19px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper-soft);
+    }
+
+    .file-icon { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 7px; background: #e9f2ef; color: var(--teal); }
+    .file-icon svg { width: 15px; height: 15px; }
+    .file-row strong { display: block; color: #344348; font-size: 11px; font-weight: 650; }
+    .file-row span { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 10px; }
+    .file-check { width: 15px; height: 15px; margin-left: auto; color: var(--teal); }
+
+    .field-label { display: block; margin: 15px 0 7px; color: var(--ink-muted); font-size: 10px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; }
+
+    .fake-select {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 37px;
+      padding: 0 11px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      background: #fffefa;
+      color: #35454a;
+      font-size: 12px;
+    }
+
+    .fake-select svg { width: 14px; height: 14px; color: #8c9998; }
+
+    .import-summary { display: flex; gap: 14px; margin-top: 15px; }
+    .summary-item strong { display: block; color: #36474b; font-size: 13px; font-weight: 700; }
+    .summary-item span { display: block; margin-top: 3px; color: var(--ink-muted); font-size: 10px; }
+
+    .pii-warning {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      margin-top: 15px;
+      padding: 9px 10px;
+      border: 1px solid #f0dfbc;
+      border-radius: 7px;
+      background: var(--amber-soft);
+      color: #805d27;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .pii-warning svg { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 1px; }
+
+    .review-button {
+      width: 100%;
+      min-height: 39px;
+      margin-top: 15px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--teal-deep);
+      color: #fffdfa;
+      font-size: 12px;
+      font-weight: 650;
+      letter-spacing: .01em;
+    }
+
+    .graph-panel { min-height: 236px; padding: 21px 22px 19px; overflow: hidden; }
+    .graph-visual { position: relative; height: 112px; margin: 16px -3px 8px; overflow: hidden; border: 1px solid #e4ebe7; border-radius: 8px; background: #f4f8f5; }
+    .graph-visual svg { width: 100%; height: 100%; }
+    .graph-caption { display: flex; align-items: center; justify-content: space-between; color: var(--ink-muted); font-size: 10px; }
+    .graph-caption strong { color: var(--teal-deep); font-size: 11px; font-weight: 650; }
+
+    .last-sync {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 19px;
+      color: #7f898a;
+      font-size: 10px;
+    }
+
+    .last-sync svg { width: 13px; height: 13px; color: var(--teal); }
+
+    @media (max-width: 1180px) {
+      body { min-width: 0; }
+      .main { padding-right: 24px; padding-left: 24px; }
+      .workspace { grid-template-columns: minmax(0, 1.4fr) minmax(290px, .8fr); }
+      .metric { padding-right: 12px; padding-left: 12px; }
+    }
+
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 76px minmax(0, 1fr); }
+      .sidebar { align-items: center; padding-right: 10px; padding-left: 10px; }
+      .brand { padding: 0; }
+      .brand span, .nav-label, .nav-item span, .privacy-note, .sidebar-footer { display: none; }
+      .nav-item { justify-content: center; width: 48px; padding: 0; }
+      .nav-list { margin-top: 48px; }
+      .nav-item.active { box-shadow: inset 3px 0 0 #6eb9ad; }
+      .workspace { grid-template-columns: 1fr; }
+      .side-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 620px) {
+      .app-shell { display: block; }
+      .sidebar { display: none; }
+      .main { padding: 0 17px 24px; }
+      .topbar { height: 67px; }
+      .account { display: none; }
+      .page-heading { align-items: flex-start; flex-direction: column; gap: 20px; padding-top: 26px; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .side-stack { grid-template-columns: 1fr; }
+      .ask-header, .question-wrap, .answer-area { padding-right: 19px; padding-left: 19px; }
+      .evidence { margin-right: 19px; margin-left: 19px; }
+      .ask-motif { opacity: .2; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegación principal">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7.2 8.2 12 5.4l4.8 2.8v5.6L12 16.6l-4.8-2.8V8.2Z" />
+            <path d="M7.2 8.2 12 11l4.8-2.8M12 11v5.6" />
+          </svg>
+        </div>
+        <span>LazoGraph</span>
+      </div>
+
+      <div class="nav-label">Espacio local</div>
+      <nav class="nav-list">
+        <a class="nav-item active" href="#dashboard" aria-current="page">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>
+          <span>Dashboard</span>
+        </a>
+        <a class="nav-item" href="#importar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg>
+          <span>Importar chat</span>
+        </a>
+        <a class="nav-item" href="#preguntar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6a2.5 2.5 0 0 1-2.5 2.5h-5.2L7 19v-4H7.5A2.5 2.5 0 0 1 5 12.5v-6Z"/><path d="M9 9.5h6M9 12h3"/></svg>
+          <span>Preguntar</span>
+        </a>
+        <a class="nav-item" href="#personas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.8 19a5.2 5.2 0 0 1 10.4 0M16 5.5a3 3 0 0 1 0 5.8M16.6 14a4.2 4.2 0 0 1 3.6 5"/></svg>
+          <span>Personas</span>
+        </a>
+        <a class="nav-item" href="#operaciones">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg>
+          <span>Operaciones</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <div class="privacy-note">
+        <div class="mini-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10V7a5 5 0 0 1 10 0v3"/><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M12 14v2"/></svg>
+        </div>
+        <strong>Todo permanece en este dispositivo</strong>
+        <span>Sin sincronización externa ni envío de conversaciones.</span>
+      </div>
+      <div class="sidebar-footer"><i class="status-dot"></i><span>Estado local saludable</span></div>
+    </aside>
+
+    <main class="main" id="dashboard">
+      <header class="topbar">
+        <div class="breadcrumb"><span>Espacio local</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><strong>Dashboard</strong></div>
+        <div class="topbar-right">
+          <div class="local-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg>Proveedor local · sin red</div>
+          <div class="account"><div class="avatar">AC</div><span>Abdair Coca</span></div>
+        </div>
+      </header>
+
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">Visión general</p>
+          <h1>Tu grafo personal</h1>
+          <p class="heading-copy">Explorá recuerdos, personas y conexiones con evidencia verificable.</p>
+        </div>
+        <div class="dataset-select" aria-label="Dataset seleccionado">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z"/><path d="M4 7v5c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12v5c0 1.7 3.6 3 8 3s8-1.3 8-3v-5"/></svg>
+          <div><small>Dataset seleccionado</small><strong>mi-chat</strong></div>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="Resumen del dataset">
+        <div class="metric"><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6a2.5 2.5 0 0 1-2.5 2.5h-5.2L7 19v-4H7.5A2.5 2.5 0 0 1 5 12.5v-6Z"/></svg></div><div><strong>3.614</strong><span>Mensajes procesados</span></div></div>
+        <div class="metric"><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3.8 19a5.2 5.2 0 0 1 10.4 0M16 5.5a3 3 0 0 1 0 5.8M16.6 14a4.2 4.2 0 0 1 3.6 5"/></svg></div><div><strong>18</strong><span>Personas identificadas</span></div></div>
+        <div class="metric"><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></div><div><strong>3.614</strong><span>Vectores locales</span></div></div>
+        <div class="metric"><div class="metric-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.2"/><circle cx="17.5" cy="6" r="2.2"/><circle cx="17.5" cy="18" r="2.2"/><path d="m8 11 7.5-4M8 13l7.5 4"/></svg></div><div><strong>127</strong><span>Relaciones observadas</span></div></div>
+      </section>
+
+      <div class="section-kicker"><h2>Espacio de trabajo</h2><span>Última actualización · hoy, 10:42</span></div>
+      <section class="workspace">
+        <article class="panel ask-panel" id="preguntar">
+          <svg class="ask-motif" viewBox="0 0 275 180" fill="none" aria-hidden="true">
+            <path d="M115 32 172 67 229 41M172 67l-4 61m57-87-1 59-56 28-53-35V32l57-29 52 38Z" stroke="#a5ccc5" stroke-width="1"/>
+            <path d="m115 32 53 35 57-26M115 32v61l53 35m0-61 56-26" stroke="#73aaa1" stroke-width="1"/>
+            <circle cx="115" cy="32" r="4" fill="#6aa79c"/><circle cx="172" cy="67" r="4" fill="#d29b51"/><circle cx="229" cy="41" r="4" fill="#6aa79c"/><circle cx="168" cy="128" r="4" fill="#6aa79c"/><circle cx="115" cy="93" r="4" fill="#d29b51"/><circle cx="224" cy="100" r="4" fill="#6aa79c"/>
+          </svg>
+          <div class="ask-header">
+            <div><p class="eyebrow">Consulta con contexto</p><h2 class="ask-title">Preguntar al grafo</h2><p class="ask-subtitle">Respuestas construidas solo con información recuperada.</p></div>
+            <div class="provider-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg>Modelo local</div>
+          </div>
+          <div class="question-wrap"><div class="question-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.2 4.2M10.8 8.5v4.8M8.4 10.9h4.8"/></svg><span>¿Qué cosas le gustan a Alex?</span></div></div>
+          <div class="answer-area">
+            <span class="answer-label">Respuesta fundamentada</span>
+            <p class="answer-copy">A Alex le gustan <em>la fotografía urbana</em>, probar cafeterías nuevas y salir a correr temprano. También suele entusiasmarse con planes espontáneos al aire libre, especialmente cerca del río.</p>
+            <div class="confidence-row"><span>Confianza</span><div class="confidence-track"><i></i></div><span class="confidence-value">Alta · 0,92</span></div>
+          </div>
+          <div class="evidence">
+            <div class="evidence-head"><strong>Evidencia recuperada</strong><span>2 mensajes relevantes</span></div>
+            <div class="citation"><div class="citation-index">01</div><div class="citation-main"><strong>Alex · 12 ago 2026, 09:14</strong><span>“El sábado salí a sacar fotos por la ciudad; encontré una cafetería increíble...”</span></div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+            <div class="citation"><div class="citation-index">02</div><div class="citation-main"><strong>Alex · 18 ago 2026, 07:42</strong><span>“Si salimos temprano, después podemos correr por la costanera y tomar algo...”</span></div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+          </div>
+        </article>
+
+        <div class="side-stack">
+          <article class="panel import-panel" id="importar">
+            <div class="panel-heading"><div><h3>Importar chat</h3><p>Agregá una conversación al dataset local.</p></div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M5 19h14"/></svg></div>
+            <div class="file-row"><div class="file-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></div><div><strong>chat_alex.txt</strong><span>WhatsApp · 2,4 MB</span></div><svg class="file-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg></div>
+            <span class="field-label">Persona del dataset</span>
+            <div class="fake-select"><span>Abdair</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div>
+            <div class="import-summary"><div class="summary-item"><strong>3.614</strong><span>mensajes válidos</span></div><div class="summary-item"><strong>18</strong><span>personas detectadas</span></div><div class="summary-item"><strong>Listo</strong><span>vista previa</span></div></div>
+            <div class="pii-warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 21 20H3L12 4Z"/><path d="M12 9v5M12 17h.01"/></svg><span>Se detectaron posibles datos personales. Revisalos antes de confirmar.</span></div>
+            <button class="review-button" type="button">Revisar importación</button>
+          </article>
+
+          <article class="panel graph-panel" id="personas">
+            <div class="panel-heading"><div><h3>Red reciente</h3><p>Conexiones detectadas en mi-chat.</p></div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2"/><circle cx="17" cy="6" r="2"/><circle cx="17" cy="18" r="2"/><path d="m8 11 7-4M8 13l7 4"/></svg></div>
+            <div class="graph-visual"><svg viewBox="0 0 340 112" fill="none" aria-label="Motivo visual de red de personas"><path d="M55 55 113 27l62 28 54-24 53 28-55 28-52-32-62 33-58-29Z" stroke="#a9c9c2" stroke-width="1"/><path d="m113 27 1 33 53 32m62-89-1 38m54-10-54 24" stroke="#c4d8d2" stroke-width="1"/><circle cx="55" cy="55" r="5" fill="#41867d"/><circle cx="113" cy="27" r="5" fill="#d39b54"/><circle cx="175" cy="55" r="5" fill="#41867d"/><circle cx="229" cy="31" r="5" fill="#d39b54"/><circle cx="282" cy="59" r="5" fill="#41867d"/><circle cx="227" cy="87" r="5" fill="#41867d"/><circle cx="114" cy="60" r="4" fill="#8bb8ae"/><circle cx="62" cy="84" r="4" fill="#8bb8ae"/></svg></div>
+            <div class="graph-caption"><span>18 personas</span><strong>127 relaciones</strong></div>
+            <div class="last-sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.8-4L3 9m0 0V5m0 4h4M4 13a8 8 0 0 0 14.8 4L21 15m0 0v4m0-4h-4"/></svg>Índice actualizado localmente hace 3 min</div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
