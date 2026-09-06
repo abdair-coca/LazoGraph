@@ -196,6 +196,12 @@ def build_parser() -> argparse.ArgumentParser:
     plans_show.add_argument("--slug", required=True, help="Dataset identifier")
     plans_show.add_argument("--json", action="store_true", help="Output JSON")
     plans_show.set_defaults(handler=_run_plans)
+
+    ui_parser = commands.add_parser("ui", help="Start local web UI")
+    ui_parser.add_argument("--host", default="127.0.0.1", help="Host to bind (default 127.0.0.1)")
+    ui_parser.add_argument("--port", type=int, default=8765, help="Port to bind (default 8765)")
+    ui_parser.add_argument("--no-browser", action="store_true", help="Do not open browser")
+    ui_parser.set_defaults(handler=_run_ui)
     return parser
 
 
@@ -628,6 +634,32 @@ def _run_corrections(args: argparse.Namespace) -> int:
             f'    assert  {assertion["subject"]} --{assertion["predicate"]}--> '
             f'{assertion["object"]}'
         )
+    return 0
+
+
+def _run_ui(args: argparse.Namespace) -> int:
+    try:
+        from lazograph.ui.app import create_app
+    except Exception as exc:
+        print(f"UI unavailable: {exc}", file=sys.stderr)
+        return 2
+    import webbrowser
+
+    app = create_app()
+    url = f"http://{args.host}:{args.port}"
+    print(f"LazoGraph UI at {url} (local only)")
+    if not args.no_browser:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+    try:
+        import uvicorn
+
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    except OSError as exc:
+        print(f"UI failed to start: {exc}", file=sys.stderr)
+        return 2
     return 0
 
 
