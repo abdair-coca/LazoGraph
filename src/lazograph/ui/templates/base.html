@@ -331,6 +331,21 @@
     <section id="tab-plans" class="tab"></section>
     <section id="tab-wiki" class="tab"></section>
     <section id="tab-ops" class="tab"></section>
+  <!-- Modal / Drawer de Evidencia Interactiva -->
+  <div id="evidence-drawer" style="display:none; position:fixed; inset:0; background:rgba(22,22,22,0.4); backdrop-filter:blur(4px); z-index:100; align-items:center; justify-content:center; padding:16px;">
+    <div style="background:var(--color-surface); max-width:600px; width:100%; max-height:85vh; border-radius:var(--radius-xl); border:1px solid var(--color-hairline); box-shadow:var(--shadow-elevated); display:flex; flex-direction:column; overflow:hidden;">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--color-hairline); display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <strong style="font-size:16px;">Evidencia verificable</strong>
+          <div id="evidence-drawer-meta" style="font-size:12px; color:var(--color-muted);">Detalle del mensaje y contexto original</div>
+        </div>
+        <button type="button" class="btn-chip" onclick="document.getElementById('evidence-drawer').style.display='none';" style="font-size:14px; padding:4px 10px;">✕</button>
+      </div>
+      <div id="evidence-drawer-body" style="padding:20px; overflow-y:auto; flex:1;"></div>
+      <div style="padding:12px 20px; border-top:1px solid var(--color-hairline); display:flex; justify-content:flex-end; gap:8px; background:var(--color-surface-soft);">
+        <button id="evidence-drawer-explore" class="btn-primary" style="height:36px; padding:0 16px; font-size:13px;">Explorar en mensajes</button>
+      </div>
+    </div>
   </div>
 
   <section class="cta-band">

@@ -62,15 +62,15 @@
 - [x] **F3** Conectar la sección "Para ti" con datos representativos del dataset (`/api/diagnose`, `/api/plans`, `/api/wiki`).
 
 ### Slice G — Preguntar: Reflexión y Evidencia Interactiva (REQ-PP-015)
-- [ ] **G1** Rediseñar el formulario de consulta en `templates/base.html` con tono humano ("Habla con tu historia", no "Preguntar al grafo").
-- [ ] **G2** Implementar animación de progreso por etapas comprensibles en `static/app.js` (*Buscando conversaciones → Personas relacionadas → Analizando patrones → Construyendo respuesta*).
-- [ ] **G3** Renderizar la respuesta reflexiva en 5 secciones claras:
+- [x] **G1** Rediseñar el formulario de consulta en `templates/base.html` con tono humano ("Habla con tu historia", no "Preguntar al grafo").
+- [x] **G2** Implementar animación de progreso por etapas comprensibles en `static/app.js` (*Buscando conversaciones → Personas relacionadas → Analizando patrones → Construyendo respuesta*).
+- [x] **G3** Renderizar la respuesta reflexiva en 5 secciones claras:
   1. *Conclusión directa*
   2. *Lo que encontré* (patrones y hechos)
   3. *Evidencia interactiva* (citas clicables con origen y fragmento)
   4. *Mi perspectiva* (consejo o reflexión fundamentada)
   5. *Explorar más* (preguntas complementarias sugeridas)
-- [ ] **G4** Implementar panel lateral o modal interactivo de evidencia que despliegue el hilo de la conversación original al hacer clic en una cita.
+- [x] **G4** Implementar panel lateral o modal interactivo de evidencia que despliegue el hilo de la conversación original al hacer clic en una cita.
 
 ### Slice H — Explorar Unificado, Ajustes y Verificación (REQ-PP-012, REQ-PP-013)
 - [ ] **H1** Construir la vista unificada `Explorar` en `templates/base.html` con subniveles (Personas, Temas, Lugares, Momentos) y buscador textual integrado, consolidando la información de búsqueda, wiki y planes.

@@ -51,6 +51,47 @@ function updateParticipantDatalist(participants){
   });
 }
 
+function showEvidenceDrawer(c){
+  const drawer = qs('evidence-drawer');
+  if(!drawer) return;
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const meta = qs('evidence-drawer-meta');
+  if(meta) meta.textContent = `Mensaje ID: ${esc(c.message_id)} · Remitente: ${esc(c.sender||'Desconocido')}`;
+
+  const body = qs('evidence-drawer-body');
+  if(body){
+    body.innerHTML = `
+      <div style="background:var(--color-surface-soft); padding:16px; border-radius:var(--radius-md); margin-bottom:16px; border:1px solid var(--color-hairline);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span class="badge badge-person">${esc(c.sender||'')}</span>
+          <small style="color:var(--color-muted);">${esc(c.timestamp||'')}</small>
+        </div>
+        <div style="font-size:15px; line-height:1.6; color:var(--color-ink); font-style:italic;">"${esc(c.excerpt||'')}"</div>
+      </div>
+      <div style="font-size:12.5px; color:var(--color-muted); line-height:1.6;">
+        <div><strong>Archivo origen:</strong> <code>${esc(c.source_file||'sources/chat.jsonl')}</code></div>
+        <div style="margin-top:4px;"><strong>Relevancia en memoria:</strong> ${(c.score||0).toFixed(3)}</div>
+        <div style="margin-top:4px;"><strong>Tipo de fuente:</strong> ${esc(c.source_type||'conversación personal')}</div>
+      </div>
+    `;
+  }
+
+  const expBtn = qs('evidence-drawer-explore');
+  if(expBtn){
+    expBtn.onclick = () => {
+      drawer.style.display = 'none';
+      const sender = c.sender || '';
+      if(qs('search-participant')) qs('search-participant').value = sender;
+      if(qs('search-query')) qs('search-query').value = '';
+      searchFrom = null; searchTo = null;
+      activateTab('explore', 'search');
+      doSearch(true);
+    };
+  }
+
+  drawer.style.display = 'flex';
+}
+
 function renderAskAnswer(j){
   const container=qs('ask-answer');
   if(!container) return;
@@ -64,72 +105,85 @@ function renderAskAnswer(j){
   if(isAbstained){
     const contactName=activeParticipants[0]||'Alex';
     const reasonText=esc(j.text || 'No encontré evidencia suficiente en las conversaciones para responder con seguridad.');
-    html+=`<div class="toast toast-info" style="border-left:4px solid var(--color-brand-coral);">
+    html+=`<div class="toast toast-info" style="border-left:4px solid var(--color-person);">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
         <div>
-          <strong style="display:block; margin-bottom:4px;">Sin evidencia suficiente</strong>
-          <p style="margin:0 0 10px; font-size:13px;">${reasonText}</p>
+          <strong style="display:block; margin-bottom:4px; font-size:14px;">Sin evidencia suficiente en tus conversaciones</strong>
+          <p style="margin:0 0 10px; font-size:13.5px; line-height:1.5;">${reasonText}</p>
         </div>
-        <span class="confidence-badge conf-low">Confianza baja (${(conf*100|0)}%)</span>
+        <span class="confidence-badge conf-low">Certeza baja (${(conf*100|0)}%)</span>
       </div>
       <div style="font-size:12px; margin-top:8px; border-top:1px solid rgba(0,0,0,0.06); padding-top:8px;">
         <span style="color:var(--color-muted); display:block; margin-bottom:6px;">Probá reformular o consultar:</span>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Qué cosas le gustan a ${esc(contactName)}?" data-about="${esc(contactName)}" style="background:#fff; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:11px; cursor:pointer;">¿Qué le gusta a ${esc(contactName)}?</button>
-          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Qué planes pendientes tenemos?" style="background:#fff; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:11px; cursor:pointer;">Planes pendientes</button>
-          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Cómo describirías nuestra relación con ${esc(contactName)}?" data-about="${esc(contactName)}" style="background:#fff; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:11px; cursor:pointer;">Relación con ${esc(contactName)}</button>
+          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Qué cosas le gustan a ${esc(contactName)}?" data-about="${esc(contactName)}">¿Qué le gusta a ${esc(contactName)}?</button>
+          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Qué planes pendientes tenemos?">Planes pendientes</button>
+          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Cómo describirías nuestra relación con ${esc(contactName)}?" data-about="${esc(contactName)}">Relación con ${esc(contactName)}</button>
         </div>
       </div>
     </div>`;
   } else {
-    const badge=`<span class="confidence-badge ${confidenceClass(conf)}">Confianza: ${(conf*100|0)}%</span>`;
-    html+=`<div class="card" style="padding:var(--spacing-md); background:#fff; border:1px solid var(--color-hairline);">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
-        <h4 style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--color-muted);">Respuesta</h4>
+    const badge=`<span class="confidence-badge ${confidenceClass(conf)}">Certeza: ${(conf*100|0)}%</span>`;
+
+    // 1. Conclusión directa
+    html+=`<div class="card card-cream" style="padding:var(--spacing-md); margin-bottom:12px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+        <h4 style="margin:0; font-size:11.5px; text-transform:uppercase; letter-spacing:.8px; color:var(--color-muted);">Conclusión directa</h4>
         ${badge}
       </div>
-      <p style="margin:0; font-size:15px; line-height:1.5;">${esc(j.text||'')}</p>
+      <p style="margin:0; font-size:15.5px; line-height:1.6; color:var(--color-ink); font-weight:500;">${esc(j.text||'')}</p>
     </div>`;
 
+    // 2. Lo que encontré (Facts)
     if(j.facts && j.facts.length){
       html+=`<div class="answer-section">
-        <h4>Hechos comprobados (${j.facts.length})</h4>
-        <ul style="margin:0; padding-left:18px; line-height:1.5;">${j.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
+        <h4>Lo que encontré en tus conversaciones (${j.facts.length})</h4>
+        <ul style="margin:0; padding-left:18px; line-height:1.6;">${j.facts.map(f=>`<li style="margin-bottom:4px;">${esc(f)}</li>`).join('')}</ul>
       </div>`;
     }
 
-    if(j.inferences && j.inferences.length){
-      html+=`<div class="answer-section" style="border-left:3px solid var(--color-brand-lavender);">
-        <h4>Interpretación / Inferencias (${j.inferences.length})</h4>
-        <ul style="margin:0; padding-left:18px; line-height:1.5;">${j.inferences.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
-      </div>`;
-    }
-
-    if(j.suggestions && j.suggestions.length){
-      html+=`<div class="answer-section" style="border-left:3px solid var(--color-brand-teal);">
-        <h4>Sugerencias recomendadas</h4>
-        <ul style="margin:0; padding-left:18px; line-height:1.5;">${j.suggestions.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
-      </div>`;
-    }
-
-    if(j.missing_information && j.missing_information.length){
-      html+=`<div class="answer-section" style="border-left:3px solid var(--color-brand-ochre);">
-        <h4>Información faltante o por confirmar</h4>
-        <ul style="margin:0; padding-left:18px; line-height:1.5;">${j.missing_information.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
-      </div>`;
-    }
-
+    // 3. Evidencia interactiva (Citations)
     if(citations.length){
       html+=`<div class="answer-section">
-        <h4>Citas verificables (${citations.length})</h4>`;
-      citations.forEach(c=>{
-        const cit=`[${esc(c.source_file||c.message_id)}:${esc(c.message_id)}] ${esc(c.sender||'')} · ${esc(c.timestamp||'')} (relevancia: ${(c.score||0).toFixed(3)})`;
-        html+=`<div style="padding:8px 0; border-bottom:1px solid var(--color-hairline-soft);">
-          <span class="citation" data-sender="${esc(c.sender||'')}" data-mid="${esc(c.message_id||'')}">🔍 ${cit}</span>
-          <div style="font-size:13px; color:var(--color-ink); margin-top:4px; font-style:italic; background:var(--color-canvas); padding:6px 10px; border-radius:6px;">"${esc(c.excerpt||'')}"</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h4>Evidencia interactiva (${citations.length})</h4>
+          <small style="color:var(--color-muted); font-size:11.5px;">Click en una cita para inspeccionar</small>
+        </div>`;
+      citations.forEach((c, i)=>{
+        const cit=`[${esc(c.source_file||c.message_id)}:${esc(c.message_id)}] ${esc(c.sender||'')} · ${esc(c.timestamp||'')} (score: ${(c.score||0).toFixed(3)})`;
+        html+=`<div style="padding:10px 0; border-bottom:1px solid var(--color-hairline-soft); display:flex; justify-content:space-between; align-items:flex-start; gap:10px;" class="evidence-item">
+          <div style="flex:1;">
+            <span class="citation" data-sender="${esc(c.sender||'')}" data-mid="${esc(c.message_id||'')}">🔍 ${cit}</span>
+            <div style="font-size:13.5px; color:var(--color-ink); margin-top:4px; font-style:italic; background:var(--color-canvas); padding:8px 12px; border-radius:8px;">"${esc(c.excerpt||'')}"</div>
+          </div>
+          <button type="button" class="btn-chip btn-inspect-evidence" data-idx="${i}" style="margin-top:2px; white-space:nowrap;">Inspeccionar</button>
         </div>`;
       });
       html+=`</div>`;
+    }
+
+    // 4. Mi perspectiva (Suggestions & Inferences)
+    const hasSuggestions = j.suggestions && j.suggestions.length;
+    const hasInferences = j.inferences && j.inferences.length;
+    if(hasSuggestions || hasInferences){
+      html+=`<div class="answer-section" style="border-left:3px solid var(--color-memory);">
+        <h4>Mi perspectiva fundamentada</h4>
+        <div style="font-size:12.5px; color:var(--color-muted); margin-bottom:6px;">Observaciones y sugerencias derivadas de tu historia:</div>`;
+      if(hasInferences){
+        html+=`<ul style="margin:0 0 8px; padding-left:18px; line-height:1.6;">${j.inferences.map(inf=>`<li><span class="badge badge-memory" style="font-size:10.5px; padding:1px 6px; margin-right:4px;">Patrón</span> ${esc(inf)}</li>`).join('')}</ul>`;
+      }
+      if(hasSuggestions){
+        html+=`<ul style="margin:0; padding-left:18px; line-height:1.6;">${j.suggestions.map(s=>`<li><span class="badge badge-place" style="font-size:10.5px; padding:1px 6px; margin-right:4px;">Consejo</span> ${esc(s)}</li>`).join('')}</ul>`;
+      }
+      html+=`</div>`;
+    }
+
+    // 5. Explorar más (Missing info / follow-up)
+    if(j.missing_information && j.missing_information.length){
+      html+=`<div class="answer-section" style="border-left:3px solid var(--color-event);">
+        <h4>Explorar más / Información por confirmar</h4>
+        <ul style="margin:0; padding-left:18px; line-height:1.6;">${j.missing_information.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
+      </div>`;
     }
   }
 
@@ -148,8 +202,15 @@ function renderAskAnswer(j){
       if(qs('search-participant')) qs('search-participant').value=sender;
       if(qs('search-query')) qs('search-query').value='';
       searchFrom=null; searchTo=null;
-      document.querySelector('[data-tab="search"]').click();
+      activateTab('explore', 'search');
       doSearch(true);
+    });
+  });
+
+  container.querySelectorAll('.btn-inspect-evidence').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const idx=Number(btn.getAttribute('data-idx'));
+      if(citations[idx]) showEvidenceDrawer(citations[idx]);
     });
   });
 
@@ -642,15 +703,58 @@ if(askForm) askForm.addEventListener('submit', async e=>{
   if(!question.trim()){ toast(qs('ask-answer'),'Escribí una pregunta','error'); return; }
   const payload={question, slug:currentSlug, provider:'local', limit:5, evidence_budget:2500};
   if(about) payload.about=about;
-  const btn=askForm.querySelector('button[type=submit]'); if(btn){ btn.disabled=true; btn.innerHTML='<span class="loading"></span> Pensando...'; }
+  const btn=askForm.querySelector('button[type=submit]');
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="loading"></span> Consultando memoria...'; }
+
+  const stepsContainer = qs('ask-progress-steps');
+  const stepSearch = qs('step-search');
+  const stepPeople = qs('step-people');
+  const stepPatterns = qs('step-patterns');
+  const stepResponse = qs('step-response');
+  const answerContainer = qs('ask-answer');
+
+  let timers = [];
+  if(stepsContainer){
+    if(answerContainer) answerContainer.style.display = 'none';
+    stepsContainer.style.display = 'flex';
+    [stepSearch, stepPeople, stepPatterns, stepResponse].forEach(s => {
+      if(s) { s.className = 'inquiry-step'; }
+    });
+    if(stepSearch) stepSearch.classList.add('active');
+
+    timers.push(setTimeout(() => {
+      if(stepSearch) { stepSearch.classList.remove('active'); stepSearch.classList.add('completed'); }
+      if(stepPeople) stepPeople.classList.add('active');
+    }, 200));
+
+    timers.push(setTimeout(() => {
+      if(stepPeople) { stepPeople.classList.remove('active'); stepPeople.classList.add('completed'); }
+      if(stepPatterns) stepPatterns.classList.add('active');
+    }, 450));
+
+    timers.push(setTimeout(() => {
+      if(stepPatterns) { stepPatterns.classList.remove('active'); stepPatterns.classList.add('completed'); }
+      if(stepResponse) stepResponse.classList.add('active');
+    }, 700));
+  }
+
   try{
     const r=await fetch('/api/ask', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
     const j=await r.json();
     qs('ask-raw').textContent=JSON.stringify(j,null,2);
-    if(!r.ok){ qs('ask-answer').innerHTML=`<div class="toast toast-error">${humanError(j.detail, r.status)}</div>`; }
-    else { renderAskAnswer(j); }
-  }catch(err){ qs('ask-answer').innerHTML='<div class="toast toast-error">Error de red</div>'; }
-  finally{ if(btn){ btn.disabled=false; btn.textContent='Preguntar'; } }
+    if(!r.ok){
+      if(answerContainer) answerContainer.innerHTML=`<div class="toast toast-error">${humanError(j.detail, r.status)}</div>`;
+    } else {
+      renderAskAnswer(j);
+    }
+  }catch(err){
+    if(answerContainer) answerContainer.innerHTML='<div class="toast toast-error">Error de red</div>';
+  } finally {
+    timers.forEach(clearTimeout);
+    if(stepsContainer) stepsContainer.style.display = 'none';
+    if(answerContainer) answerContainer.style.display = 'block';
+    if(btn){ btn.disabled=false; btn.textContent='Consultar'; }
+  }
 });
 
 document.querySelectorAll('.ask-hint').forEach(btn => {
