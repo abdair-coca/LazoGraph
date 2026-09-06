@@ -13,10 +13,10 @@
 
 ## Slice B — Ask interpretado (REQ-PP-002, PP-011)
 
-- [ ] **B1** Update `static/app.js:48` `ask-form` handler: split `renderAsk(j)` into cards Text/Facts/Inferences/Suggestions/Missing + confidence badge + retrieval_summary debug toggle + citations clickable → `search?participant=`.
-- [ ] **B2** Handle abstención: if `j.citations=[]` or `confidence<0.4` show human copy "No encontré evidencia suficiente — probá con ..." + suggested queries, no stack.
-- [ ] **B3** Add UI routing hint: placeholder examples + `about` auto-suggest from `GET /api/datasets` participants.
-- [ ] **B4** Tests: `tests/test_ui_ask.py` fake provider, verify facts/inferences separation, citations existence, abstención, no leak; plus `test_ask_person` regression.
+- [x] **B1** Update `static/app.js:48` `ask-form` handler: split `renderAsk(j)` into cards Text/Facts/Inferences/Suggestions/Missing + confidence badge + retrieval_summary debug toggle + citations clickable → `search?participant=`.
+- [x] **B2** Handle abstención: if `j.citations=[]` or `confidence<0.4` show human copy "No encontré evidencia suficiente — probá con ..." + suggested queries, no stack.
+- [x] **B3** Add UI routing hint: placeholder examples + `about` auto-suggest from `GET /api/datasets` participants.
+- [x] **B4** Tests: `tests/test_ui_ask.py` fake provider, verify facts/inferences separation, citations existence, abstención, no leak; plus `test_ask_person` regression.
 
 ## Slice C — Explorar (REQ-PP-003, PP-004, PP-005, PP-006)
 

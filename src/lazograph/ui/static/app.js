@@ -28,49 +28,139 @@ function confidenceClass(c){
   if(c>=0.45) return "conf-mid";
   return "conf-low";
 }
+let activeDatasets=[];
+let activeParticipants=[];
+
+function updateParticipantDatalist(participants){
+  activeParticipants=participants||[];
+  const dl=qs('ask-participants-datalist');
+  if(dl){
+    dl.innerHTML='';
+    activeParticipants.forEach(p=>{
+      const opt=document.createElement('option');
+      opt.value=p;
+      dl.appendChild(opt);
+    });
+  }
+  const firstContact=activeParticipants[0]||'Alex';
+  document.querySelectorAll('.ask-hint').forEach(btn=>{
+    const tmpl=btn.getAttribute('data-q');
+    if(tmpl && tmpl.includes('{name}')){
+      btn.textContent=tmpl.replace(/{name}/g, firstContact);
+    }
+  });
+}
+
 function renderAskAnswer(j){
   const container=qs('ask-answer');
   if(!container) return;
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const conf=j.confidence ?? 0;
-  const badge=`<span class="confidence-badge ${confidenceClass(conf)}">Confianza: ${(conf*100|0)}%</span>`;
-  let html=`<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><p style="margin:0; flex:1;">${esc(j.text||'')}</p>${badge}</div>`;
-  // facts/inferences
-  if(j.facts && j.facts.length){
-    html+=`<div class="answer-section"><h4>Hechos</h4><ul style="margin:0; padding-left:18px;">${j.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div>`;
+  const citations=j.citations||[];
+  const isAbstained=Boolean(j.abstained || !citations.length || conf < 0.4);
+
+  let html='';
+
+  if(isAbstained){
+    const contactName=activeParticipants[0]||'Alex';
+    const reasonText=esc(j.text || 'No encontré evidencia suficiente en las conversaciones para responder con seguridad.');
+    html+=`<div class="toast toast-info" style="border-left:4px solid var(--color-brand-coral);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <div>
+          <strong style="display:block; margin-bottom:4px;">Sin evidencia suficiente</strong>
+          <p style="margin:0 0 10px; font-size:13px;">${reasonText}</p>
+        </div>
+        <span class="confidence-badge conf-low">Confianza baja (${(conf*100|0)}%)</span>
+      </div>
+      <div style="font-size:12px; margin-top:8px; border-top:1px solid rgba(0,0,0,0.06); padding-top:8px;">
+        <span style="color:var(--color-muted); display:block; margin-bottom:6px;">Probá reformular o consultar:</span>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Qué cosas le gustan a ${esc(contactName)}?" data-about="${esc(contactName)}" style="background:#fff; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:11px; cursor:pointer;">¿Qué le gusta a ${esc(contactName)}?</button>
+          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Qué planes pendientes tenemos?" style="background:#fff; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:11px; cursor:pointer;">Planes pendientes</button>
+          <button type="button" class="btn-chip ask-chip-btn" data-q="¿Cómo describirías nuestra relación con ${esc(contactName)}?" data-about="${esc(contactName)}" style="background:#fff; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:11px; cursor:pointer;">Relación con ${esc(contactName)}</button>
+        </div>
+      </div>
+    </div>`;
+  } else {
+    const badge=`<span class="confidence-badge ${confidenceClass(conf)}">Confianza: ${(conf*100|0)}%</span>`;
+    html+=`<div class="card" style="padding:var(--spacing-md); background:#fff; border:1px solid var(--color-hairline);">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+        <h4 style="margin:0; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--color-muted);">Respuesta</h4>
+        ${badge}
+      </div>
+      <p style="margin:0; font-size:15px; line-height:1.5;">${esc(j.text||'')}</p>
+    </div>`;
+
+    if(j.facts && j.facts.length){
+      html+=`<div class="answer-section">
+        <h4>Hechos comprobados (${j.facts.length})</h4>
+        <ul style="margin:0; padding-left:18px; line-height:1.5;">${j.facts.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
+      </div>`;
+    }
+
+    if(j.inferences && j.inferences.length){
+      html+=`<div class="answer-section" style="border-left:3px solid var(--color-brand-lavender);">
+        <h4>Interpretación / Inferencias (${j.inferences.length})</h4>
+        <ul style="margin:0; padding-left:18px; line-height:1.5;">${j.inferences.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
+      </div>`;
+    }
+
+    if(j.suggestions && j.suggestions.length){
+      html+=`<div class="answer-section" style="border-left:3px solid var(--color-brand-teal);">
+        <h4>Sugerencias recomendadas</h4>
+        <ul style="margin:0; padding-left:18px; line-height:1.5;">${j.suggestions.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
+      </div>`;
+    }
+
+    if(j.missing_information && j.missing_information.length){
+      html+=`<div class="answer-section" style="border-left:3px solid var(--color-brand-ochre);">
+        <h4>Información faltante o por confirmar</h4>
+        <ul style="margin:0; padding-left:18px; line-height:1.5;">${j.missing_information.map(f=>`<li>${esc(f)}</li>`).join('')}</ul>
+      </div>`;
+    }
+
+    if(citations.length){
+      html+=`<div class="answer-section">
+        <h4>Citas verificables (${citations.length})</h4>`;
+      citations.forEach(c=>{
+        const cit=`[${esc(c.source_file||c.message_id)}:${esc(c.message_id)}] ${esc(c.sender||'')} · ${esc(c.timestamp||'')} (relevancia: ${(c.score||0).toFixed(3)})`;
+        html+=`<div style="padding:8px 0; border-bottom:1px solid var(--color-hairline-soft);">
+          <span class="citation" data-sender="${esc(c.sender||'')}" data-mid="${esc(c.message_id||'')}">🔍 ${cit}</span>
+          <div style="font-size:13px; color:var(--color-ink); margin-top:4px; font-style:italic; background:var(--color-canvas); padding:6px 10px; border-radius:6px;">"${esc(c.excerpt||'')}"</div>
+        </div>`;
+      });
+      html+=`</div>`;
+    }
   }
-  if(j.inferences && j.inferences.length){
-    html+=`<div class="answer-section"><h4>Interpretación</h4><ul style="margin:0; padding-left:18px;">${j.inferences.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div>`;
+
+  if(j.retrieval_summary && Object.keys(j.retrieval_summary).length){
+    html+=`<details style="margin-top:12px;">
+      <summary style="cursor:pointer; font-size:12px; color:var(--color-muted);">Detalles de recuperación / Debug</summary>
+      <pre style="font-size:11px; background:#fff; padding:10px; border-radius:8px; border:1px solid var(--color-hairline); overflow:auto; margin-top:6px;">${esc(JSON.stringify(j.retrieval_summary,null,2))}</pre>
+    </details>`;
   }
-  if(j.suggestions && j.suggestions.length){
-    html+=`<div class="answer-section"><h4>Sugerencias</h4><ul style="margin:0; padding-left:18px;">${j.suggestions.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div>`;
-  }
-  if(j.missing_information && j.missing_information.length){
-    html+=`<div class="answer-section"><h4>Falta info</h4><ul style="margin:0; padding-left:18px;">${j.missing_information.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></div>`;
-  }
-  // citations
-  if(j.citations && j.citations.length){
-    html+=`<div class="answer-section"><h4>Citas verificables</h4>`;
-    j.citations.forEach(c=>{
-      const cit=`[${esc(c.message_id)}] ${esc(c.sender)} — ${esc(c.timestamp||'')} (score ${(c.score||0).toFixed(3)})`;
-      html+=`<div style="padding:6px 0; border-bottom:1px solid var(--color-hairline-soft);"><span class="citation" data-sender="${esc(c.sender)}" data-mid="${esc(c.message_id)}">${cit}</span><br/><span style="font-size:13px;">${esc(c.excerpt||'')}</span></div>`;
-    });
-    html+=`</div>`;
-  } else if(!j.text || j.text.toLowerCase().includes("no encontr")){
-    html+=`<div class="toast toast-info">No encontré evidencia suficiente para responder con seguridad — probá reformular o con "¿Qué le gusta a Alex?" + --about.</div>`;
-  }
-  if(j.retrieval_summary){
-    html+=`<details style="margin-top:8px;"><summary style="cursor:pointer; font-size:12px; color:var(--color-muted);">Debug检索</summary><pre style="font-size:11px; background:#fff; padding:8px; border-radius:8px; overflow:auto;">${esc(JSON.stringify(j.retrieval_summary,null,2))}</pre></details>`;
-  }
+
   container.innerHTML=html;
+
   container.querySelectorAll('.citation').forEach(el=>{
     el.addEventListener('click', ()=>{
       const sender=el.getAttribute('data-sender');
-      qs('search-participant').value=sender;
-      qs('search-query').value='';
+      if(qs('search-participant')) qs('search-participant').value=sender;
+      if(qs('search-query')) qs('search-query').value='';
       searchFrom=null; searchTo=null;
       document.querySelector('[data-tab="search"]').click();
       doSearch(true);
+    });
+  });
+
+  container.querySelectorAll('.ask-chip-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const q=btn.getAttribute('data-q');
+      const ab=btn.getAttribute('data-about');
+      if(qs('ask-question')) qs('ask-question').value=q;
+      if(qs('ask-about')) qs('ask-about').value=ab||'';
+      const askForm=qs('ask-form');
+      if(askForm) askForm.dispatchEvent(new Event('submit'));
     });
   });
 }
@@ -78,15 +168,29 @@ function renderAskAnswer(j){
 async function loadDatasets(){
   try{
     const r=await fetch('/api/datasets'); const j=await r.json();
+    activeDatasets=j.datasets||[];
     const sel=qs('dataset-select'); if(!sel) return;
     sel.innerHTML='';
-    if(!j.datasets.length){ sel.innerHTML='<option>(sin datasets)</option>'; currentSlug=null; return; }
-    j.datasets.forEach(d=>{ const o=document.createElement('option'); o.value=d.slug; o.textContent=d.slug+' — '+d.name; sel.appendChild(o); });
-    currentSlug=j.datasets[0].slug; sel.value=currentSlug;
+    if(!activeDatasets.length){
+      sel.innerHTML='<option>(sin datasets)</option>';
+      currentSlug=null;
+      updateParticipantDatalist([]);
+      return;
+    }
+    activeDatasets.forEach(d=>{
+      const o=document.createElement('option');
+      o.value=d.slug;
+      o.textContent=d.slug+' — '+d.name;
+      sel.appendChild(o);
+    });
+    currentSlug=activeDatasets[0].slug;
+    sel.value=currentSlug;
+    updateParticipantDatalist(activeDatasets[0].participants||[]);
     loadDiagnose();
     updateTelemetryToggle();
   }catch(e){ /* offline */}
 }
+
 async function loadDiagnose(){
   if(!currentSlug) return;
   try{
@@ -113,7 +217,12 @@ async function updateTelemetryToggle(){
   try{ const r=await fetch('/api/telemetry'); const j=await r.json(); const btn=qs('ops-telemetry-toggle'); if(btn) btn.textContent='Telemetría: '+(j.enabled?'on':'off'); }catch(_){}
 }
 
-if(qs('dataset-select')) qs('dataset-select').addEventListener('change', e=>{currentSlug=e.target.value; loadDiagnose();});
+if(qs('dataset-select')) qs('dataset-select').addEventListener('change', e=>{
+  currentSlug=e.target.value;
+  const match=activeDatasets.find(d=>d.slug===currentSlug);
+  updateParticipantDatalist(match ? match.participants : []);
+  loadDiagnose();
+});
 document.querySelectorAll('nav button').forEach(b=> b.addEventListener('click', ()=>{
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -295,6 +404,20 @@ if(askForm) askForm.addEventListener('submit', async e=>{
     else { renderAskAnswer(j); }
   }catch(err){ qs('ask-answer').innerHTML='<div class="toast toast-error">Error de red</div>'; }
   finally{ if(btn){ btn.disabled=false; btn.textContent='Preguntar'; } }
+});
+
+document.querySelectorAll('.ask-hint').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.preventDefault();
+    const tmpl = btn.getAttribute('data-q');
+    const firstContact = activeParticipants[0] || 'Alex';
+    const q = tmpl.replace(/{name}/g, firstContact);
+    if(qs('ask-question')) qs('ask-question').value = q;
+    if(tmpl.includes('{name}') && qs('ask-about')){
+      qs('ask-about').value = firstContact;
+    }
+    if(askForm) askForm.dispatchEvent(new Event('submit'));
+  });
 });
 
 let searchOffset=0, searchQuery="", searchParticipant="", searchHasMore=false;

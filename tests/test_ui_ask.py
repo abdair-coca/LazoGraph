@@ -74,3 +74,108 @@ def test_ask_alias_isolation(tmp_path, monkeypatch):
     else:
         # 422 is also acceptable for this minimal fixture without vectors
         assert r.status_code in (200, 422)
+
+
+def test_ask_facts_and_inferences_separation(tmp_path, monkeypatch):
+    root = tmp_path / "knowledge"
+    root.mkdir()
+    monkeypatch.setenv("OPENPERSONA_KNOWLEDGE", str(root))
+    dataset = root / "sample"
+    dataset.mkdir(parents=True)
+    (dataset / "dataset.json").write_text(json.dumps({"slug": "sample", "name": "Samantha"}), encoding="utf-8")
+
+    from lazograph.domain.answer import Answer, Evidence
+
+    fake_answer = Answer(
+        text="A Samantha le gusta pintar.",
+        citations=(
+            Evidence(
+                message_id="m1",
+                sender="Samantha",
+                source_file="chat.jsonl",
+                timestamp="2026-01-01T10:01:00",
+                excerpt="Me gusta pintar paisajes",
+                score=0.92,
+            ),
+        ),
+        confidence=0.88,
+        entities=("Samantha",),
+        retrieval_summary={"docs_retrieved": 3, "focal_ratio": 1.0},
+        abstained=False,
+        facts=("Le gusta pintar paisajes.",),
+        inferences=("Probablemente disfruta actividades tranquilas.",),
+        suggestions=("Regalarle pinturas o lienzos.",),
+        missing_information=("No especifica qué tipo de pinturas.",),
+    )
+
+    with patch("lazograph.features.ask_person.service.answer_about_person", return_value=fake_answer):
+        client = TestClient(create_app())
+        r = client.post("/api/ask", json={"question": "¿Qué le gusta a Samantha?", "about": "Samantha", "slug": "sample"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["text"] == "A Samantha le gusta pintar."
+        assert body["confidence"] == 0.88
+        assert body["facts"] == ["Le gusta pintar paisajes."]
+        assert body["inferences"] == ["Probablemente disfruta actividades tranquilas."]
+        assert body["suggestions"] == ["Regalarle pinturas o lienzos."]
+        assert body["missing_information"] == ["No especifica qué tipo de pinturas."]
+        assert len(body["citations"]) == 1
+        assert body["citations"][0]["sender"] == "Samantha"
+        assert body["retrieval_summary"]["docs_retrieved"] == 3
+
+
+def test_ask_abstention_response(tmp_path, monkeypatch):
+    root = tmp_path / "knowledge"
+    root.mkdir()
+    monkeypatch.setenv("OPENPERSONA_KNOWLEDGE", str(root))
+    dataset = root / "sample"
+    dataset.mkdir(parents=True)
+    (dataset / "dataset.json").write_text(json.dumps({"slug": "sample", "name": "Samantha"}), encoding="utf-8")
+
+    from lazograph.domain.answer import Answer
+
+    abstained_answer = Answer(
+        text="No encontré evidencia suficiente en las conversaciones.",
+        citations=(),
+        confidence=0.15,
+        entities=("Samantha",),
+        retrieval_summary={},
+        abstained=True,
+        facts=(),
+        inferences=(),
+        suggestions=(),
+        missing_information=(),
+    )
+
+    with patch("lazograph.features.ask_person.service.answer_about_person", return_value=abstained_answer):
+        client = TestClient(create_app())
+        r = client.post("/api/ask", json={"question": "¿Dónde nació?", "about": "Samantha", "slug": "sample"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["abstained"] is True
+        assert body["confidence"] < 0.4
+        assert body["citations"] == []
+
+
+def test_datasets_endpoint_includes_participants(tmp_path, monkeypatch):
+    root = tmp_path / "knowledge"
+    root.mkdir()
+    monkeypatch.setenv("OPENPERSONA_KNOWLEDGE", str(root))
+    dataset = root / "sample"
+    dataset.mkdir(parents=True)
+    (dataset / "dataset.json").write_text(json.dumps({"slug": "sample", "name": "Samantha"}), encoding="utf-8")
+    (dataset / "participants.json").write_text(json.dumps({
+        "participants": [
+            {"name": "Samantha", "identity_type": "persona"},
+            {"name": "Alex", "identity_type": "contact"},
+        ]
+    }), encoding="utf-8")
+
+    client = TestClient(create_app())
+    r = client.get("/api/datasets")
+    assert r.status_code == 200
+    datasets = r.json().get("datasets", [])
+    assert len(datasets) == 1
+    assert datasets[0]["slug"] == "sample"
+    assert datasets[0]["participants"] == ["Samantha", "Alex"]
+

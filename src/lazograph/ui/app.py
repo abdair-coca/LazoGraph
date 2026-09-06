@@ -112,7 +112,24 @@ def create_app() -> FastAPI:
                     meta = json.loads((path / "dataset.json").read_text(encoding="utf-8"))
                 except Exception:
                     meta = {}
-                items.append({"slug": path.name, "name": meta.get("name", path.name), "path": str(path)})
+                participants = []
+                p_file = path / "participants.json"
+                if p_file.exists():
+                    try:
+                        p_data = json.loads(p_file.read_text(encoding="utf-8"))
+                        participants = [
+                            p.get("name")
+                            for p in p_data.get("participants", [])
+                            if isinstance(p, dict) and p.get("name")
+                        ]
+                    except Exception:
+                        participants = []
+                items.append({
+                    "slug": path.name,
+                    "name": meta.get("name", path.name),
+                    "path": str(path),
+                    "participants": participants,
+                })
         return {"datasets": items, "knowledge_root": str(root)}
 
     @app.get("/api/diagnose")
