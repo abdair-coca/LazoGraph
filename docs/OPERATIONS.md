@@ -395,11 +395,40 @@ Source state changed after export. Create a new redacted export; do not treat st
 
 E2E retries briefly locked files automatically. Close external database viewers. Use `--keep-temp` to preserve state when debugging.
 
+## Product operations (P1-P3)
+
+### Backup and restore
+```powershell
+# UI: POST /api/backup {"slug":"sam"} → zip, POST /api/restore con zip
+# CLI:
+lazo backup --slug sam --output sam.zip  # vía POST /api/backup
+lazo restore sam.zip --slug sam
+```
+Backup zips `dataset.json`, `participants.json`, `sources/`, `wiki/` (excluye locks). Restore valida `dataset.json` y mueve atómicamente. Ver `docs/specs/product-distribution/spec.md:REQ-PD-004`.
+
+### Update check
+```powershell
+curl http://127.0.0.1:8765/api/update-check
+# → {"current":"0.8.0","latest":"0.9.0","update_available":false,"warning":"sin conexión"}
+```
+Offline-safe (timeout 3s). Release publica `SHA256SUMS`.
+
+### Telemetry (opt-in)
+```powershell
+curl http://127.0.0.1:8765/api/telemetry          # {"enabled":false}
+curl -X POST http://127.0.0.1:8765/api/telemetry -H "Content-Type: application/json" -d '{"enabled":true}'
+```
+Off por defecto, persiste en `${knowledge_root}/config.json`, solo counts anónimos.
+
+### Delete dataset (GDPR)
+```powershell
+curl -X DELETE "http://127.0.0.1:8765/api/datasets/sam?confirm=sam"
+# mueve a quarantine/deleted-sam-{ts}, recuperable 30d
+```
+
 ## Current product boundary
 
 LazoGraph imports chats, answers grounded questions about one participant, a supported two-person
 relationship, or explicit pending plans, adds auditable manual context, and applies reversible
 relationship corrections through an immutable ledger. The default answer is conservative and
-extractive; Ollama or an explicitly configured hosted provider supplies generative synthesis. Slice
-6 pending plans are demo-ready and awaiting feedback; grounded suggestions and time-bounded
-relationship descriptions remain planned slices.
+extractive; Ollama or an explicitly configured hosted provider supplies generative synthesis. Product-real P1-P3 (distribution/UX/hardening) demo-ready; P4 releases + Playwright en curso.

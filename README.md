@@ -78,6 +78,8 @@ space); `diagnose.py` reports the mismatch until then.
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e .
+# o con pipx (sin venv manual):
+# pipx install .
 ```
 
 On macOS/Linux, replace activation with `source .venv/bin/activate` and use `python` in the commands below.

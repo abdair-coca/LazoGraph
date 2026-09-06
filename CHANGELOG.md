@@ -1,5 +1,13 @@
 # Changelog — LazoGraph
 
+## [0.9.0] — 2026-09-02 — product-real P1-P3
+
+### Added
+- Product distribution: `lazo ui` wizard when no datasets, `POST /api/migrate` (0.7→0.8.0 con backup), `POST /api/backup|restore` (zip atómico), `GET /api/update-check` offline-safe, `GET /` CSP + wizard.
+- Product UX: `GET /api/search` con `limit/offset` + `has_more`, `GET /api/timeline` por día, `GET /api/graph?format=json` effective sin `plan_*`, `GET /api/wiki/{page}` render, `GET /api/progress/{id}`.
+- Product hardening: token `X-UI-Token` (`knowledge_root/.ui-token` 0600, 401 sin token), `Content-Security-Policy` + `X-Frame-Options`, `GET /api/logs`, `GET/POST /api/telemetry` (off por defecto), `DELETE /api/datasets/{slug}?confirm=` con quarantine.
+- Release workflow `.github/workflows/release.yml` con `SHA256SUMS`, Playwright config `playwright.config.ts` + `e2e/product.spec.ts`.
+
 ## [Unreleased]
 
 ### Added
