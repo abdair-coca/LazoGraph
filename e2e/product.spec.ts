@@ -4,25 +4,37 @@ test("wizard → import → ask → search → timeline → graph → plans → 
   await page.goto("/");
   await expect(page.locator("body")).toContainText(/LazoGraph|wizard/i);
 
-  // UI Tab Navigation & Elements
-  await page.click('[data-tab="search"]');
+  // UI Tab Navigation & Elements (Warm Intelligence Grouped IA)
+  await page.click('[data-tab="inicio"]');
+  await expect(page.locator("#inicio-greeting")).toBeVisible();
+
+  await page.click('[data-tab="ask"]');
+  await expect(page.locator("#ask-question")).toBeVisible();
+
+  await page.click('[data-tab="explore"]');
   await expect(page.locator("#search-query")).toBeVisible();
+  await expect(page.locator('[data-sub="people"]')).toBeVisible();
 
-  await page.click('[data-tab="timeline"]');
-  await expect(page.locator("#tab-timeline h2")).toContainText("Timeline");
-
-  await page.click('[data-tab="graph"]');
-  await expect(page.locator("#tab-graph h2")).toContainText("Grafo");
-
-  await page.click('[data-tab="plans"]');
+  // Test Explorar subviews
+  await page.click('[data-sub="plans"]');
   await expect(page.locator("#plans-status")).toBeVisible();
 
-  await page.click('[data-tab="wiki"]');
+  await page.click('[data-sub="wiki"]');
   await expect(page.locator("#wiki-load")).toBeVisible();
 
-  await page.click('[data-tab="ops"]');
+  await page.click('[data-sub="search"]');
+  await expect(page.locator("#search-query")).toBeVisible();
+
+  await page.click('[data-tab="history"]');
+  await expect(page.locator("#timeline-bars")).toBeVisible();
+
+  await page.click('[data-tab="graph"]');
+  await expect(page.locator("#graph-container")).toBeVisible();
+
+  await page.click('[data-tab="settings"]');
   await expect(page.locator("#ops-backup")).toBeVisible();
   await expect(page.locator("#ops-update-check")).toBeVisible();
+  await expect(page.locator("#ops-health-check")).toBeVisible();
 
   // 1. Health & Datasets
   const health = await request.get("/api/health");

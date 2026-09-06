@@ -503,13 +503,72 @@ function activateTab(tabName, subview){
   if(legacyTabEl && legacyTabEl !== tabEl) legacyTabEl.classList.add('active');
 
   if(realTab === 'explore'){
-    const targetSub = subview || (['search', 'wiki', 'plans'].includes(tabName) ? tabName : 'search');
+    const targetSub = subview || (['search', 'people', 'wiki', 'plans'].includes(tabName) ? tabName : 'search');
     activateExploreSubview(targetSub);
   } else if(realTab === 'history'){
     if(typeof loadTimeline === 'function') loadTimeline();
   } else if(realTab === 'graph'){
     const graphBtn = document.querySelector('[data-tab="graph"]');
     if(graphBtn && typeof loadGraph === 'function') loadGraph();
+  }
+}
+
+async function loadExplorePeople(){
+  const list = qs('explore-people-list');
+  if(!list) return;
+  if(!currentSlug){
+    list.innerHTML = '<div class="toast toast-info">Seleccioná un dataset para explorar personas.</div>';
+    return;
+  }
+  list.innerHTML = '<div style="color:var(--color-muted); font-size:13px;">Cargando personas...</div>';
+  try {
+    const r = await fetch('/api/diagnose?slug=' + encodeURIComponent(currentSlug));
+    if(!r.ok){
+      list.innerHTML = '<div class="toast toast-error">Error al consultar participantes.</div>';
+      return;
+    }
+    const j = await r.json();
+    const parts = j.participants || [];
+    if(!parts.length){
+      list.innerHTML = '<div class="toast toast-info">No se encontraron personas registradas en este dataset.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    parts.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.cssText = 'padding:14px; display:flex; flex-direction:column; justify-content:space-between; gap:10px; background:var(--color-surface); border:1px solid var(--color-hairline); border-radius:var(--radius-lg);';
+      const initial = p.charAt(0).toUpperCase();
+      const escP = String(p).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      card.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:38px; height:38px; border-radius:999px; background:var(--color-brand-coral, #FF5C7A); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px;">
+            ${initial}
+          </div>
+          <div>
+            <div style="font-weight:600; font-size:14px;">${escP}</div>
+            <div style="font-size:11px; color:var(--color-muted);">Contacto en memoria</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:4px;">
+          <button type="button" class="btn-secondary explore-person-search" style="flex:1; height:32px; padding:0 8px; font-size:11px;">Mensajes</button>
+          <button type="button" class="btn-secondary explore-person-graph" style="flex:1; height:32px; padding:0 8px; font-size:11px;">En el grafo</button>
+        </div>
+      `;
+      card.querySelector('.explore-person-search').addEventListener('click', () => {
+        if(qs('search-participant')) qs('search-participant').value = p;
+        if(qs('search-query')) qs('search-query').value = '';
+        activateTab('explore', 'search');
+        doSearch(true);
+      });
+      card.querySelector('.explore-person-graph').addEventListener('click', () => {
+        activateTab('graph');
+        showGraphNodeDetail(p);
+      });
+      list.appendChild(card);
+    });
+  } catch(e) {
+    list.innerHTML = '<div class="toast toast-error">Error al cargar la lista de personas.</div>';
   }
 }
 
@@ -521,7 +580,9 @@ function activateExploreSubview(subName){
   const targetEl = document.getElementById('subview-' + subName);
   if(targetEl) targetEl.style.display = 'block';
 
-  if(subName === 'wiki'){
+  if(subName === 'people'){
+    loadExplorePeople();
+  } else if(subName === 'wiki'){
     if(typeof loadWiki === 'function') loadWiki();
   } else if(subName === 'plans'){
     const loadBtn = qs('plans-load');
@@ -536,6 +597,20 @@ document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click',
 document.querySelectorAll('.sub-nav-btn').forEach(b => b.addEventListener('click', ()=>{
   activateExploreSubview(b.dataset.sub);
 }));
+
+document.querySelectorAll('.explore-filter-chip').forEach(b => b.addEventListener('click', ()=>{
+  const target = b.getAttribute('data-target-sub');
+  if(target) activateExploreSubview(target);
+}));
+
+if(qs('explore-people-refresh')) qs('explore-people-refresh').addEventListener('click', loadExplorePeople);
+
+if(qs('explore-reset-btn')) qs('explore-reset-btn').addEventListener('click', ()=>{
+  searchFrom = null; searchTo = null;
+  if(qs('explore-reset-btn')) qs('explore-reset-btn').style.display = 'none';
+  if(qs('search-active-filter')) qs('search-active-filter').style.display = 'none';
+  doSearch(true);
+});
 
 function renderImportPreview(j, target, equivOptId, equivModeName){
   const el=qs(target||'import-preview');
@@ -849,20 +924,49 @@ async function loadTimeline(){
     if(!r.ok){ qs('timeline-raw').textContent=humanError(j.detail, r.status); return; }
     qs('timeline-raw').textContent=JSON.stringify(j,null,2);
     const bars=qs('timeline-bars'); if(!bars) return; bars.innerHTML='';
-    if(!j.buckets || !j.buckets.length){ bars.innerHTML='<div class="toast toast-info">Sin mensajes para timeline</div>'; return; }
+    const meta=qs('timeline-meta');
+    if(!j.buckets || !j.buckets.length){
+      bars.innerHTML='<div class="toast toast-info">Sin mensajes para timeline</div>';
+      if(meta) meta.textContent='Sin actividad registrada';
+      return;
+    }
+    const total = j.total !== undefined ? j.total : j.buckets.reduce((acc, b)=>acc+b.count, 0);
+    const firstDate = j.buckets[0]?.date || '';
+    const lastDate = j.buckets[j.buckets.length-1]?.date || '';
+    if(meta) meta.textContent=`${total} momentos · ${firstDate} → ${lastDate}`;
+
     const max=Math.max(...j.buckets.map(b=>b.count),1);
     j.buckets.forEach(b=>{
-      const col=document.createElement('div'); col.style.cssText='flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;';
+      const col=document.createElement('div'); col.style.cssText='flex:1; min-width:28px; display:flex; flex-direction:column; align-items:center; gap:4px;';
       const bar=document.createElement('div');
-      bar.title=`${b.date}: ${b.count} — click para filtrar`;
-      bar.style.cssText=`width:100%; background:var(--color-person, #FF5C7A); height:${(b.count/max)*60+8}px; cursor:pointer; border-radius:6px; display:flex; align-items:end; justify-content:center; color:#fff; font-size:10px; transition:transform .1s;`;
+      bar.title=`${b.date}: ${b.count} — click para seleccionar`;
+      bar.style.cssText=`width:100%; background:var(--color-person, #FF5C7A); height:${(b.count/max)*65+10}px; cursor:pointer; border-radius:6px; display:flex; align-items:end; justify-content:center; color:#fff; font-size:10px; font-weight:600; transition:all .15s ease;`;
       bar.textContent=b.count;
       bar.addEventListener('click', ()=>{
-        searchFrom=b.date; searchTo=b.date;
-        activateTab('explore', 'search');
-        doSearch(true);
+        const panel = qs('timeline-selected-panel');
+        const selDate = qs('timeline-selected-date');
+        const selInfo = qs('timeline-selected-info');
+        const selExp = qs('timeline-selected-explore');
+        if(panel && selDate && selInfo && selExp){
+          panel.style.display = 'flex';
+          selDate.textContent = `📅 ${b.date}`;
+          selInfo.textContent = `${b.count} recuerdos registrados en este día.`;
+          selExp.onclick = () => {
+            searchFrom = b.date;
+            searchTo = b.date;
+            const rstBtn = qs('explore-reset-btn');
+            if(rstBtn) rstBtn.style.display = 'inline-block';
+            const actFilter = qs('search-active-filter');
+            if(actFilter){
+              actFilter.textContent = `Filtrando por fecha: ${b.date}`;
+              actFilter.style.display = 'block';
+            }
+            activateTab('explore', 'search');
+            doSearch(true);
+          };
+        }
       });
-      const label=document.createElement('div'); label.textContent=b.date.slice(5); label.style.fontSize='9px'; label.style.textAlign='center';
+      const label=document.createElement('div'); label.textContent=b.date.slice(5); label.style.fontSize='9px'; label.style.textAlign='center'; label.style.color='var(--color-muted)';
       col.appendChild(bar); col.appendChild(label); bars.appendChild(col);
     });
   }catch(e){ qs('timeline-raw').textContent='Error cargando timeline'; }
@@ -1304,6 +1408,26 @@ if(qs('ops-delete')) qs('ops-delete').addEventListener('click', async () => {
     toast(out, 'Error al eliminar el dataset.', 'error');
   }
 });
+
+if(qs('ops-health-check')){
+  qs('ops-health-check').addEventListener('click', async () => {
+    const detail = qs('ops-health-detail');
+    if(detail) detail.innerHTML = '<span style="color:var(--color-muted);">Verificando estado local...</span>';
+    try {
+      const r = await fetch('/api/health');
+      const j = await r.json();
+      if(detail){
+        if(r.ok && j.ok){
+          detail.innerHTML = '<div class="toast toast-success" style="margin-top:8px;">🟢 <strong>Sistema saludable:</strong> Motor local 100% operativo sin dependencias de red.</div>';
+        } else {
+          detail.innerHTML = '<div class="toast toast-error" style="margin-top:8px;">⚠️ El sistema reportó anomalías en el estado local.</div>';
+        }
+      }
+    } catch(e) {
+      if(detail) detail.innerHTML = '<div class="toast toast-error" style="margin-top:8px;">Error al conectar con el servidor local.</div>';
+    }
+  });
+}
 
 // health check button on cream card
 const healthBtn = document.querySelector('.card-cream .btn-secondary');

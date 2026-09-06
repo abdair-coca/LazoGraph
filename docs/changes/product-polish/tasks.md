@@ -73,8 +73,8 @@
 - [x] **G4** Implementar panel lateral o modal interactivo de evidencia que despliegue el hilo de la conversación original al hacer clic en una cita.
 
 ### Slice H — Explorar Unificado, Ajustes y Verificación (REQ-PP-012, REQ-PP-013)
-- [ ] **H1** Construir la vista unificada `Explorar` en `templates/base.html` con subniveles (Personas, Temas, Lugares, Momentos) y buscador textual integrado, consolidando la información de búsqueda, wiki y planes.
-- [ ] **H2** Adaptar `Historia` (Timeline) a los nuevos estilos Warm Intelligence manteniendo el filtrado interactivo por fechas.
-- [ ] **H3** Rediseñar la vista `Ajustes` (ex Ops) con comunicación tranquila de privacidad ("Local-first · Sin red · Tus recuerdos"), y acciones limpias de backup, restore y eliminación con cuarentena.
-- [ ] **H4** Actualizar suite de tests E2E en `e2e/product.spec.ts` para cubrir la nueva navegación y flujos visuales.
-- [ ] **H5** Ejecutar suite completa de tests de regresión (`pytest tests -q`) y verificación de invariantes.
+- [x] **H1** Construir la vista unificada `Explorar` en `templates/base.html` con subniveles (Personas, Temas, Lugares, Momentos) y buscador textual integrado, consolidando la información de búsqueda, wiki y planes.
+- [x] **H2** Adaptar `Historia` (Timeline) a los nuevos estilos Warm Intelligence manteniendo el filtrado interactivo por fechas.
+- [x] **H3** Rediseñar la vista `Ajustes` (ex Ops) con comunicación tranquila de privacidad ("Local-first · Sin red · Tus recuerdos"), y acciones limpias de backup, restore y eliminación con cuarentena.
+- [x] **H4** Actualizar suite de tests E2E en `e2e/product.spec.ts` para cubrir la nueva navegación y flujos visuales.
+- [x] **H5** Ejecutar suite completa de tests de regresión (`pytest tests -q`) y verificación de invariantes.

@@ -175,28 +175,52 @@
     </div>
   </section>
 
-  <!-- TAB: EXPLORAR (Unificado: Mensajes, Temas, Planes) -->
+  <!-- TAB: EXPLORAR (Unificado: Mensajes, Personas, Temas, Planes) -->
   <section id="tab-explore" class="tab">
     <div class="card">
-      <h2>Explorar memoria</h2>
-      <p>Descubrí personas, temas, momentos y conversaciones en tu historia digital.</p>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+        <div>
+          <h2>Explorar memoria</h2>
+          <p style="margin:0; color:var(--color-muted); font-size:14px;">Descubrí personas, temas, momentos y conversaciones en tu historia digital.</p>
+        </div>
+      </div>
       
       <div class="sub-nav">
         <button class="sub-nav-btn active" data-sub="search">Buscar mensajes</button>
+        <button class="sub-nav-btn" data-sub="people">Personas</button>
         <button class="sub-nav-btn" data-sub="wiki">Temas e identidad</button>
         <button class="sub-nav-btn" data-sub="plans">Planes y momentos</button>
       </div>
 
       <!-- Subvista: Buscar Mensajes -->
       <div id="subview-search" class="subview">
+        <div style="margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+          <span style="font-size:12px; color:var(--color-muted);">Filtros rápidos:</span>
+          <button type="button" class="btn-chip explore-filter-chip" data-target-sub="people">👤 Ver personas</button>
+          <button type="button" class="btn-chip explore-filter-chip" data-target-sub="wiki">🏷️ Ver temas</button>
+          <button type="button" class="btn-chip explore-filter-chip" data-target-sub="plans">📅 Ver planes</button>
+          <button type="button" class="btn-chip" id="explore-reset-btn" style="display:none; color:var(--color-brand-coral);">✕ Quitar filtro de fecha</button>
+        </div>
         <form id="search-form" style="display:flex; gap:var(--spacing-sm);">
           <input type="text" id="search-query" class="input" placeholder="Buscar palabras clave, momentos o temas..." style="flex:1;">
           <input type="text" id="search-participant" class="input" placeholder="Por persona..." style="width:200px;">
           <button type="submit" class="btn-primary">Buscar</button>
         </form>
+        <div id="search-active-filter" style="display:none; font-size:12px; color:var(--color-brand-coral); margin-top:8px;"></div>
         <div id="search-results" style="margin-top:var(--spacing-md);"></div>
         <button id="search-more" class="btn-secondary" style="display:none; margin-top:var(--spacing-sm);">Cargar más</button>
         <pre id="search-raw" style="margin-top:var(--spacing-sm); display:none;"></pre>
+      </div>
+
+      <!-- Subvista: Personas -->
+      <div id="subview-people" class="subview" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <span style="font-size:13px; color:var(--color-muted);">Personas identificadas en tus conversaciones</span>
+          <button id="explore-people-refresh" class="btn-secondary" style="font-size:12px; height:32px;">Actualizar</button>
+        </div>
+        <div id="explore-people-list" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px;">
+          <div style="color:var(--color-muted); font-size:13px;">Cargando personas de tu memoria...</div>
+        </div>
       </div>
 
       <!-- Subvista: Wiki / Temas -->
@@ -233,9 +257,21 @@
   <!-- TAB: HISTORIA (Timeline) -->
   <section id="tab-history" class="tab">
     <div class="card card-cream">
-      <h2>Historia</h2>
-      <p>Línea de tiempo de actividad. Hacé click en cualquier momento para ver las conversaciones asociadas.</p>
-      <div id="timeline-bars" style="display:flex; gap:6px; align-items:end; min-height:100px; padding:16px; background:var(--color-surface); border-radius:var(--radius-lg); border:1px solid var(--color-hairline);"></div>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+        <div>
+          <h2>Historia</h2>
+          <p style="margin:0; color:var(--color-muted); font-size:14px;">Línea de tiempo de actividad y recuerdos. Hacé click en cualquier día para explorar las conversaciones asociadas.</p>
+        </div>
+        <div id="timeline-meta" style="font-size:13px; color:var(--color-muted); padding:4px 10px; background:var(--color-surface); border-radius:999px; border:1px solid var(--color-hairline);"></div>
+      </div>
+      <div id="timeline-bars" style="display:flex; gap:6px; align-items:end; min-height:110px; padding:16px; background:var(--color-surface); border-radius:var(--radius-lg); border:1px solid var(--color-hairline); overflow-x:auto;"></div>
+      <div id="timeline-selected-panel" style="display:none; margin-top:14px; padding:12px 16px; background:var(--color-surface); border-radius:var(--radius-md); border:1px solid var(--color-hairline); align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <div>
+          <strong id="timeline-selected-date">Fecha</strong>
+          <div id="timeline-selected-info" style="font-size:12px; color:var(--color-muted);">Mensajes registrados en este día</div>
+        </div>
+        <button id="timeline-selected-explore" class="btn-primary" style="height:34px; padding:0 14px; font-size:12px;">Ver conversaciones de este día</button>
+      </div>
       <pre id="timeline-raw" style="margin-top:var(--spacing-sm); display:none;"></pre>
     </div>
   </section>
@@ -290,27 +326,54 @@
     <div class="grid grid-2">
       <div class="card">
         <h3>Memoria y datos</h3>
-        <p style="color:var(--color-muted); font-size:13px;">Gestión segura de copias de seguridad y estado de tus recuerdos.</p>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <button id="ops-diagnose" class="btn-secondary">Diagnóstico</button>
-          <button id="ops-backup" class="btn-secondary">Descargar copia</button>
-          <label class="btn-secondary" style="cursor:pointer; display:inline-flex; align-items:center;">Restaurar copia <input type="file" id="ops-restore-file" accept=".zip" style="display:none;"></label>
-          <button id="ops-update-check" class="btn-secondary">Buscar actualizaciones</button>
-          <span id="ops-update-badge" class="badge" style="display:none;"></span>
+        <p style="color:var(--color-muted); font-size:13px; margin-bottom:16px;">Gestión segura de tus recuerdos, diagnósticos y copias de seguridad locales.</p>
+        
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <div style="font-size:12px; font-weight:600; color:var(--color-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Copias de seguridad</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <button id="ops-backup" class="btn-primary" style="height:36px; padding:0 14px; font-size:13px;">📥 Descargar copia</button>
+              <label class="btn-secondary" style="cursor:pointer; display:inline-flex; align-items:center; height:36px; padding:0 14px; font-size:13px;">📤 Restaurar copia <input type="file" id="ops-restore-file" accept=".zip" style="display:none;"></label>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:12px; font-weight:600; color:var(--color-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Diagnóstico y estado</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <button id="ops-diagnose" class="btn-secondary" style="height:36px; padding:0 14px; font-size:13px;">🩺 Diagnóstico</button>
+              <button id="ops-update-check" class="btn-secondary" style="height:36px; padding:0 14px; font-size:13px;">🔄 Actualizaciones</button>
+              <span id="ops-update-badge" class="badge" style="display:none;"></span>
+              <button id="ops-logs" class="btn-secondary" style="height:36px; padding:0 14px; font-size:13px;">📋 Ver registros</button>
+              <button id="ops-telemetry-toggle" class="btn-secondary" style="height:36px; padding:0 14px; font-size:13px;">Telemetría: off</button>
+            </div>
+          </div>
+
+          <div style="margin-top:8px; padding-top:12px; border-top:1px solid var(--color-hairline);">
+            <div style="font-size:12px; font-weight:600; color:var(--color-error); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Zona de resguardo</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+              <div style="font-size:12px; color:var(--color-muted);">Al eliminar un dataset, se traslada primero a la carpeta de cuarentena local.</div>
+              <button id="ops-delete" class="btn-secondary" style="color:var(--color-error); border-color:var(--color-error); height:34px; padding:0 12px; font-size:12px;">🗑️ Eliminar memoria</button>
+            </div>
+          </div>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
-          <button id="ops-logs" class="btn-secondary">Ver registros</button>
-          <button id="ops-telemetry-toggle" class="btn-secondary">Telemetría: off</button>
-          <button id="ops-delete" class="btn-secondary" style="color:var(--color-error); border-color:var(--color-error);">Eliminar memoria</button>
-        </div>
-        <pre id="ops-output" style="margin-top:var(--spacing-sm); max-height:240px; overflow:auto; background:var(--color-surface-soft); padding:12px; border-radius:12px;"></pre>
-        <pre id="ops-logs-output" style="margin-top:var(--spacing-sm); max-height:180px; overflow:auto; display:none;"></pre>
+
+        <pre id="ops-output" style="margin-top:var(--spacing-sm); max-height:200px; overflow:auto; background:var(--color-surface-soft); padding:12px; border-radius:12px;"></pre>
+        <pre id="ops-logs-output" style="margin-top:var(--spacing-sm); max-height:160px; overflow:auto; display:none;"></pre>
       </div>
+
       <div class="card card-cream">
-        <h3>Privacidad y tranquilidad</h3>
+        <div style="display:inline-block; font-size:11px; font-weight:600; color:var(--color-sage, #5b8778); background:rgba(159,197,183,0.2); padding:3px 8px; border-radius:999px; margin-bottom:8px;">
+          🛡️ Local-first · Sin red · Tus recuerdos
+        </div>
+        <h3 style="margin-top:0;">Privacidad y tranquilidad</h3>
         <p style="color:var(--color-body); font-size:13.5px; line-height:1.6;">
-          LazoGraph opera bajo el principio <strong>Local-first</strong>. Tus conversaciones, análisis e índices vectoriales nunca abandonan este equipo.
+          LazoGraph opera 100% en tu propio ordenador. Tus conversaciones, análisis de grafos e índices semánticos nunca se transmiten a servidores externos ni modelos en la nube.
         </p>
+        <ul style="font-size:13px; color:var(--color-body); padding-left:18px; line-height:1.7; margin:12px 0;">
+          <li><strong>Zero Cloud:</strong> Modelos e inferencias locales con ONNX y Chroma.</li>
+          <li><strong>Cuarentena segura:</strong> Reconciliaciones y bajas van a cuarentena local.</li>
+          <li><strong>Portabilidad total:</strong> Descargá y restaurá tus recuerdos en cualquier momento en formato estándar.</li>
+        </ul>
         <div id="ops-health-detail" style="font-size:13px; margin-top:12px;"></div>
         <button id="ops-health-check" class="btn-secondary" style="margin-top:14px;">Verificar estado local</button>
       </div>
@@ -327,10 +390,13 @@
     <button data-tab="ops"></button>
     <section id="tab-dashboard" class="tab"></section>
     <section id="tab-search" class="tab"></section>
-    <section id="tab-timeline" class="tab"></section>
+    <section id="tab-timeline" class="tab"><h2>Timeline</h2></section>
+    <section id="tab-graph" class="tab"><h2>Grafo</h2></section>
     <section id="tab-plans" class="tab"></section>
     <section id="tab-wiki" class="tab"></section>
     <section id="tab-ops" class="tab"></section>
+  </div>
+
   <!-- Modal / Drawer de Evidencia Interactiva -->
   <div id="evidence-drawer" style="display:none; position:fixed; inset:0; background:rgba(22,22,22,0.4); backdrop-filter:blur(4px); z-index:100; align-items:center; justify-content:center; padding:16px;">
     <div style="background:var(--color-surface); max-width:600px; width:100%; max-height:85vh; border-radius:var(--radius-xl); border:1px solid var(--color-hairline); box-shadow:var(--shadow-elevated); display:flex; flex-direction:column; overflow:hidden;">
