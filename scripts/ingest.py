@@ -27,6 +27,7 @@ import unicodedata
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Callable
 
 try:
     from .runtime import configure_safe_output
@@ -59,7 +60,12 @@ SOURCE_EQUIVALENCE_MIN_OVERLAP = 0.95
 SOURCE_EQUIVALENCE_MIN_SIZE_RATIO = 0.90
 
 
-def main(argv: list[str] | None = None, *, knowledge_root: Path | None = None):
+def main(
+    argv: list[str] | None = None,
+    *,
+    knowledge_root: Path | None = None,
+    progress_callback: Any = None,
+):
     configure_safe_output()
     parser = argparse.ArgumentParser(description='Ingest data into a persona dataset')
     parser.add_argument('--slug', required=True, help='Persona dataset slug')
@@ -280,7 +286,12 @@ def main(argv: list[str] | None = None, *, knowledge_root: Path | None = None):
         return
 
     # --- Store in MemPalace ---
-    _store_in_mempalace(dataset_dir, args.slug, new_messages)
+    _store_in_mempalace(
+        dataset_dir,
+        args.slug,
+        new_messages,
+        progress_callback=progress_callback,
+    )
 
     # --- Extract KG triples ---
     kg_stats = _extract_kg_triples(dataset_dir, new_messages)
@@ -648,6 +659,7 @@ def _store_in_mempalace(
     *,
     show_progress: bool = False,
     clock=None,
+    progress_callback=None,
 ) -> int:
     palace_dir = dataset_dir / '.mempalace' / 'palace'
 
@@ -667,7 +679,7 @@ def _store_in_mempalace(
     stored = 0
     batch_size = 128
     clock = clock or time.monotonic
-    started_at = clock() if show_progress else None
+    started_at = clock() if (show_progress or progress_callback) else None
     for batch_start in range(0, len(messages), batch_size):
         batch = messages[batch_start:batch_start + batch_size]
         documents = []
@@ -684,8 +696,16 @@ def _store_in_mempalace(
                 metadatas=metadatas,
             )
             stored += len(batch)
+            elapsed = max(clock() - started_at, 0.0) if started_at else 0.0
+            rate = stored / elapsed if elapsed > 0 else 0.0
+            remaining = max(0, len(messages) - stored)
+            eta = remaining / rate if rate > 0 else 0.0
+            if progress_callback:
+                try:
+                    progress_callback(stored, len(messages), elapsed, eta)
+                except Exception:
+                    pass
             if show_progress:
-                elapsed = max(clock() - started_at, 0.0)
                 print(
                     f'   MemPalace: {_format_vector_progress(stored, len(messages), elapsed)}',
                     flush=True,
