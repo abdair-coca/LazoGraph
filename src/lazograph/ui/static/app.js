@@ -231,9 +231,181 @@ async function loadDiagnose(){
     const raw=qs('diagnose-raw'); if(raw) raw.textContent=JSON.stringify(j,null,2);
     const opsOut=qs('ops-output'); if(opsOut) opsOut.textContent=JSON.stringify(j,null,2);
     const healthDetail=qs('ops-health-detail'); if(healthDetail) healthDetail.textContent=health;
+
+    // Connect "Para ti" with plans
+    try{
+      const plansRes = await fetch('/api/plans?slug='+encodeURIComponent(currentSlug));
+      if(plansRes.ok){
+        const pData = await plansRes.json();
+        const pList = pData.plans || [];
+        const hTitle = qs('highlight-plans-title');
+        const hDesc = qs('highlight-plans-desc');
+        if(hTitle && hDesc){
+          if(pList.length){
+            const p0 = pList[0];
+            hTitle.textContent = p0.title || 'Plan detectado';
+            hDesc.textContent = `${pList.length} iniciativas o planes registrados (${p0.status || 'pendiente'}).`;
+          } else {
+            hTitle.textContent = 'Sin planes activos';
+            hDesc.textContent = 'No hay compromisos pendientes registrados en este dataset.';
+          }
+        }
+      }
+    }catch(_){}
+
+    // Connect "Para ti" with wiki / themes
+    try{
+      const wikiRes = await fetch('/api/wiki?slug='+encodeURIComponent(currentSlug));
+      if(wikiRes.ok){
+        const wData = await wikiRes.json();
+        const pages = wData.pages || [];
+        const hpTitle = qs('highlight-pattern-title');
+        const hpDesc = qs('highlight-pattern-desc');
+        if(hpTitle && hpDesc){
+          if(pages.length){
+            hpTitle.textContent = `${pages.length} temas sintetizados`;
+            const cleanThemes = pages.map(p=>p.name.replace(/\.md$/,'')).slice(0, 3).join(', ');
+            hpDesc.textContent = `Temas explorables: ${cleanThemes}.`;
+          } else {
+            hpTitle.textContent = 'Patrones en desarrollo';
+            hpDesc.textContent = 'A medida que se analicen más conversaciones se extraerán temas.';
+          }
+        }
+      }
+    }catch(_){}
+
+    // Load living graph for "Tu Mundo"
+    loadWorldGraph();
   }catch(e){
     const diag=qs('diagnose'); if(diag) diag.textContent='Sin conexión o dataset no disponible';
   }
+}
+
+async function loadWorldGraph(){
+  const container = qs('inicio-world-container');
+  if(!container || !currentSlug) return;
+  try{
+    const r = await fetch('/api/graph?slug=' + encodeURIComponent(currentSlug) + '&format=json');
+    const j = await r.json();
+    if(!r.ok || !j.nodes || !j.nodes.length){
+      container.innerHTML = `<div style="text-align:center; padding:32px;">
+        <div class="clay-blob" style="margin:0 auto 12px; background:var(--color-surface); border:1px solid var(--color-hairline);">◈</div>
+        <p style="margin:0; font-size:13px; color:var(--color-muted);">Sin conexiones registradas aún — importá tu primer chat.</p>
+      </div>`;
+      return;
+    }
+    const cleanEdges = (j.edges||[]).filter(e => !String(e.type||'').startsWith('plan_'));
+
+    if(!window.cytoscape){
+      container.innerHTML = `<div style="padding:16px; width:100%; height:100%; overflow:auto;">
+        <div style="font-size:12px; color:var(--color-muted); margin-bottom:8px; font-weight:600;">Entidades en tu memoria:</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">` +
+        j.nodes.map(n => `<button type="button" class="btn-chip world-node-fallback" data-id="${encodeURIComponent(n.id)}" style="background:var(--color-surface); border:1px solid var(--color-hairline); border-radius:999px; padding:4px 12px; font-size:12px; cursor:pointer;">${n.label||n.id}</button>`).join('') +
+        `</div></div>`;
+      container.querySelectorAll('.world-node-fallback').forEach(btn => {
+        btn.addEventListener('click', () => {
+          showWorldNodeDetail(decodeURIComponent(btn.getAttribute('data-id')));
+        });
+      });
+      return;
+    }
+
+    container.innerHTML = '';
+    const cy = cytoscape({
+      container: container,
+      elements: [
+        ...j.nodes.map(n => {
+          const isPersona = activeParticipants.includes(n.id) || activeParticipants.includes(n.label);
+          return {
+            data: {
+              id: n.id,
+              label: n.label || n.id,
+              color: isPersona ? '#FF5C7A' : '#9D8FD1',
+              size: isPersona ? 34 : 26
+            }
+          };
+        }),
+        ...cleanEdges.map(e => ({
+          data: {
+            source: e.from,
+            target: e.to,
+            label: e.type || ''
+          }
+        }))
+      ],
+      style: [
+        {
+          selector: 'node',
+          style: {
+            'label': 'data(label)',
+            'background-color': 'data(color)',
+            'color': '#161616',
+            'font-size': '11px',
+            'font-weight': '600',
+            'text-valign': 'bottom',
+            'text-margin-y': 6,
+            'width': 'data(size)',
+            'height': 'data(size)',
+            'border-width': 2,
+            'border-color': '#FFFFFF'
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'curve-style': 'bezier',
+            'line-color': '#E2DACB',
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': '#9D8FD1',
+            'width': 1.5,
+            'opacity': 0.75
+          }
+        },
+        {
+          selector: 'node:selected',
+          style: {
+            'border-width': 3,
+            'border-color': '#161616',
+            'background-color': '#FF5C7A'
+          }
+        }
+      ],
+      layout: {
+        name: 'cose',
+        animate: false,
+        nodeRepulsion: 4500,
+        idealEdgeLength: 60
+      }
+    });
+
+    cy.on('tap', 'node', evt => {
+      const node = evt.target;
+      showWorldNodeDetail(node.id(), node.data('label'));
+    });
+  }catch(e){
+    container.innerHTML = '<div class="toast toast-error">Error cargando tu mundo</div>';
+  }
+}
+
+function showWorldNodeDetail(id, label){
+  const detailEl = qs('inicio-world-detail');
+  if(!detailEl) return;
+  const name = label || id;
+  const safeName = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  detailEl.style.display = 'block';
+  detailEl.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="badge badge-person">Persona</span>
+        <strong style="font-size:15px;">${safeName}</strong>
+      </div>
+      <div style="font-size:12.5px; color:var(--color-muted); margin-top:2px;">Entidad en tu memoria personal</div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-primary" style="height:34px; padding:0 14px; font-size:12px;" onclick="const inp=document.getElementById('search-participant'); if(inp) inp.value='${safeName}'; activateTab('explore', 'search'); doSearch(true);">Ver conversaciones</button>
+      <button class="btn-secondary" style="height:34px; padding:0 12px; font-size:12px;" onclick="document.getElementById('ask-about').value='${safeName}'; activateTab('ask');">Preguntar sobre ${safeName}</button>
+    </div>
+  </div>`;
 }
 async function updateTelemetryToggle(){
   try{ const r=await fetch('/api/telemetry'); const j=await r.json(); const btn=qs('ops-telemetry-toggle'); if(btn) btn.textContent='Telemetría: '+(j.enabled?'on':'off'); }catch(_){}

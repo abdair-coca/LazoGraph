@@ -49,17 +49,17 @@
 - [x] **E3** Actualizar `static/app.js` para gestionar el nuevo enrutamiento de pestañas y estado activo de la navegación.
 
 ### Slice F — Inicio: "Tu Mundo" y "Para Ti" (REQ-PP-014)
-- [ ] **F1** Maquetar la vista de `Inicio` en `templates/base.html`:
+- [x] **F1** Maquetar la vista de `Inicio` en `templates/base.html`:
   - Saludo contextual cálido ("Buenas tardes, [Nombre]").
   - Pregunta inspiradora central ("¿Qué quieres entender hoy?") con sugerencias de reflexión.
   - Contenedor central prominente para "Tu Mundo" (grafo vivo interactivo).
   - Sección de tarjetas abiertas "Para ti" (patrón detectado, recuerdo, reflexión).
   - Indicador sutil de actividad de memoria ("X recuerdos procesados · Y personas conectadas") eliminando tarjetas KPI corporativas.
-- [ ] **F2** Configurar en `static/app.js` la instancia Cytoscape de "Tu Mundo":
+- [x] **F2** Configurar en `static/app.js` la instancia Cytoscape de "Tu Mundo":
   - Estilos de nodos personalizados por entidad (avatares/emojis y bordes Coral/Lavender/Sage/Gold).
   - Microinteracciones ambientales (movimiento sutil al hover/focus).
   - Panel contextual al seleccionar entidad con resumen de mensajes, tiempo de historia y botón para explorar.
-- [ ] **F3** Conectar la sección "Para ti" con datos representativos del dataset (`/api/diagnose`, `/api/plans`, `/api/wiki`).
+- [x] **F3** Conectar la sección "Para ti" con datos representativos del dataset (`/api/diagnose`, `/api/plans`, `/api/wiki`).
 
 ### Slice G — Preguntar: Reflexión y Evidencia Interactiva (REQ-PP-015)
 - [ ] **G1** Rediseñar el formulario de consulta en `templates/base.html` con tono humano ("Habla con tu historia", no "Preguntar al grafo").
