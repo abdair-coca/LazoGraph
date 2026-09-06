@@ -27,6 +27,12 @@ __pycache__/
 .env.*
 !.env.example
 
+# Node / Playwright
+node_modules/
+.playwright/
+test-results/
+playwright-report/
+
 # OS
 .DS_Store
 Thumbs.db

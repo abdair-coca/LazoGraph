@@ -1,5 +1,13 @@
 # Changelog — LazoGraph
 
+## [0.9.1] — 2026-09-06 — product-polish (Slices A-D)
+
+### Added
+- **Slice A (Import Polido)**: Real-time progress callback and polling via `GET /api/progress/{job_id}` (128-message chunks with ETA/percentages), preview token retention on 422 equivalent detection for zero-reupload reconciliation, 20MB file cap validation.
+- **Slice B (Ask Interpretado)**: Distinct structured cards (Text, Facts, Inferences, Suggestions, Missing Information, Citations), human abstention card with suggested queries on low confidence, `--about` participant autocomplete datalist.
+- **Slice C (Explorar)**: Date-filtered search and timeline navigation (`from_date`/`to_date`), active date filter chip with removal, deduplication by `message_id`, offline Cytoscape fallback with node-level citation inspect, wiki markdown rendering with clickable evidence tags and lint status badge.
+- **Slice D (Operar & Hardening)**: Interactive Plans filter by status/participant and lifecycle detail modal, Ops panel with atomic zip backup, restore with rollback safety, quarantine-based dataset deletion, CSP and X-UI-Token middleware hardening, privacy-safe question hashing when telemetry is off, and full 9-flow Playwright E2E test suite.
+
 ## [0.9.0] — 2026-09-02 — product-real P1-P3
 
 ### Added

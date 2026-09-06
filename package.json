@@ -1,0 +1,28 @@
+{
+  "name": "lazograph",
+  "version": "1.0.0",
+  "description": "Local-first personal knowledge system that turns life data into searchable memories, an identity-aware knowledge graph, an evidence-backed wiki, and safe training exports.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abdair-coca/LazoGraph.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/abdair-coca/LazoGraph/issues"
+  },
+  "homepage": "https://github.com/abdair-coca/LazoGraph#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

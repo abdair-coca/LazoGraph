@@ -29,14 +29,14 @@
 
 ## Slice D — Operar (REQ-PP-007, PP-008, PP-009, PP-010 resto)
 
-- [ ] **D1** Plans tab: `static/app.js:58` add filters `status` select + `participant` input + `show` detail modal with transitions `proposed→pending...`, reuse `GET /api/plans`.
-- [ ] **D2** Ops tab: `templates/base.html:166` add buttons `Backup`, `Restore` (file input), `Delete dataset` (confirm=slug modal), `Telemetry toggle`, `Logs tail`, `Update check` badge; wire `app.js` fetch handlers with human copy.
-- [ ] **D3** Harden `ui/app.py:60` ensure `X-UI-Token` 401 copy humano, `validate_slug` 422, `413 file too large`, CSP header `app.py:91` verified, logs `question_hash` not raw when telemetry off.
-- [ ] **D4** E2E `e2e/product.spec.ts:3` ampliar a 9 flujos: wizard→import→ask→search paginado→timeline click→graph click→plans filter→wiki→backup/restore→delete; run `npx playwright test`.
-- [ ] **D5** Final verify: `pytest tests -q -p no:warnings` (excl. known Windows Chroma heavy) + `python scripts/diagnose.py --slug sample` healthy + invariants `unique messages = vectors = KG`.
+- [x] **D1** Plans tab: `static/app.js:58` add filters `status` select + `participant` input + `show` detail modal with transitions `proposed→pending...`, reuse `GET /api/plans`.
+- [x] **D2** Ops tab: `templates/base.html:166` add buttons `Backup`, `Restore` (file input), `Delete dataset` (confirm=slug modal), `Telemetry toggle`, `Logs tail`, `Update check` badge; wire `app.js` fetch handlers with human copy.
+- [x] **D3** Harden `ui/app.py:60` ensure `X-UI-Token` 401 copy humano, `validate_slug` 422, `413 file too large`, CSP header `app.py:91` verified, logs `question_hash` not raw when telemetry off.
+- [x] **D4** E2E `e2e/product.spec.ts:3` ampliar a 9 flujos: wizard→import→ask→search paginado→timeline click→graph click→plans filter→wiki→backup/restore→delete; run `npx playwright test`.
+- [x] **D5** Final verify: `pytest tests -q -p no:warnings` (excl. known Windows Chroma heavy) + `python scripts/diagnose.py --slug sample` healthy + invariants `unique messages = vectors = KG`.
 
 ## Global
 
-- [ ] Update `docs/OPERATIONS.md:397` with backup/restore/delete flows verification.
-- [ ] Add `CHANGELOG.md` entry for `product-polish`.
-- [ ] Demo script: one-command `lazo ui` → wizard → ask → timeline → graph without docs.
+- [x] Update `docs/OPERATIONS.md:397` with backup/restore/delete flows verification.
+- [x] Add `CHANGELOG.md` entry for `product-polish`.
+- [x] Demo script: one-command `lazo ui` → wizard → ask → timeline → graph without docs.

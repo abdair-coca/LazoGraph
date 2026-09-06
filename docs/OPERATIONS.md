@@ -431,4 +431,10 @@ curl -X DELETE "http://127.0.0.1:8765/api/datasets/sam?confirm=sam"
 LazoGraph imports chats, answers grounded questions about one participant, a supported two-person
 relationship, or explicit pending plans, adds auditable manual context, and applies reversible
 relationship corrections through an immutable ledger. The default answer is conservative and
-extractive; Ollama or an explicitly configured hosted provider supplies generative synthesis. Product-real P1-P3 (distribution/UX/hardening) demo-ready; P4 releases + Playwright en curso.
+extractive; Ollama or an explicitly configured hosted provider supplies generative synthesis.
+
+Product polish (Slices A through D) is fully integrated:
+- Slice A (Import): Real-time progress tracking, 20MB file caps, equivalent reconciliation.
+- Slice B (Ask): Structured card separation (Text, Facts, Inferences, Suggestions, Missing Information, Citations) and abstention handling.
+- Slice C (Explorar): Timeline date range filtering, graph fallback with stats and citation panel, wiki evidence links and lint status.
+- Slice D (Operar): Plan lifecycle transitions, backup/restore atomic packaging, quarantine-safe deletion, and Playwright 9-flow E2E coverage.

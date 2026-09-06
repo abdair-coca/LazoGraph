@@ -89,9 +89,24 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def _csp_middleware(request, call_next):
         response = await call_next(request)
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
         response.headers["X-Frame-Options"] = "DENY"
         return response
+
+    @app.middleware("http")
+    async def _token_middleware(request: Request, call_next):
+        if request.method in ("POST", "DELETE", "PUT", "PATCH") and request.url.path.startswith("/api/"):
+            try:
+                root = knowledge_root()
+                tok_path = root / ".ui-token"
+                if tok_path.exists():
+                    expected = tok_path.read_text(encoding="utf-8").strip()
+                    got = request.headers.get("X-UI-Token") or request.headers.get("x-ui-token")
+                    if not got or got != expected:
+                        return JSONResponse({"detail": "token requerido: X-UI-Token inválido o ausente"}, status_code=401)
+            except Exception:
+                pass
+        return await call_next(request)
 
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -412,6 +427,35 @@ def create_app() -> FastAPI:
         except Exception as exc:
             # map known errors to 422 with message
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        try:
+            import hashlib
+            import datetime
+
+            root = knowledge_root()
+            logs_dir = root / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            cfg_path = root / "config.json"
+            telemetry_on = False
+            if cfg_path.exists():
+                try:
+                    telemetry_on = bool(json.loads(cfg_path.read_text(encoding="utf-8")).get("telemetry_enabled"))
+                except Exception:
+                    pass
+            q_hash = "sha256:" + hashlib.sha256(question.encode("utf-8")).hexdigest()[:16]
+            entry = {
+                "ts": datetime.datetime.now().isoformat(),
+                "route": "/api/ask",
+                "slug": slug,
+                "question_hash": q_hash,
+            }
+            if telemetry_on:
+                entry["question"] = question
+            with (logs_dir / "lazograph.log").open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
         return answer.to_dict()
 
     @app.get("/api/plans")

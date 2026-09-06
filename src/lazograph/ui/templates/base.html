@@ -173,8 +173,9 @@
         <input id="plans-participant" class="input" placeholder="Participante" style="width:160px; height:40px;">
         <button id="plans-load" class="btn-secondary">Cargar planes</button>
       </div>
-      <pre id="plans-output" style="margin-top:var(--spacing-sm); background:var(--color-canvas); color:var(--color-ink); padding:var(--spacing-sm); border-radius:var(--radius-md); max-height:300px; overflow:auto;"></pre>
-      <div id="plans-detail" style="margin-top:8px;"></div>
+      <div id="plans-list" style="margin-top:var(--spacing-md); display:flex; flex-direction:column; gap:8px;"></div>
+      <div id="plans-detail" style="margin-top:8px; display:none; background:#fff; color:var(--color-ink); border-radius:var(--radius-md); padding:var(--spacing-md); border:1px solid var(--color-hairline);"></div>
+      <pre id="plans-output" style="margin-top:var(--spacing-sm); background:var(--color-canvas); color:var(--color-ink); padding:var(--spacing-sm); border-radius:var(--radius-md); max-height:200px; overflow:auto;"></pre>
     </div>
   </section>
 
@@ -193,11 +194,12 @@
   <section id="tab-ops" class="tab">
     <div class="grid grid-2">
       <div class="card"><h3>Operaciones</h3>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <button id="ops-diagnose" class="btn-secondary">Diagnose</button>
           <button id="ops-backup" class="btn-secondary">Backup</button>
           <label class="btn-secondary" style="cursor:pointer; display:inline-flex; align-items:center;">Restore <input type="file" id="ops-restore-file" accept=".zip" style="display:none;"></label>
           <button id="ops-update-check" class="btn-secondary">Check update</button>
+          <span id="ops-update-badge" class="badge" style="display:none;"></span>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
           <button id="ops-logs" class="btn-secondary">Ver logs</button>

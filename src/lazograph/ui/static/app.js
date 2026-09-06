@@ -683,84 +683,276 @@ if(tabWiki) tabWiki.addEventListener('click', async ()=>{
 if(qs('wiki-load')) qs('wiki-load').addEventListener('click', ()=> tabWiki?.click());
 
 // Plans
+const tabPlans = document.querySelector('[data-tab="plans"]');
+if(tabPlans) tabPlans.addEventListener('click', () => {
+  const loadBtn = qs('plans-load');
+  if(loadBtn) loadBtn.click();
+});
+
+async function showPlanDetail(planId) {
+  const detailEl = qs('plans-detail');
+  if(!detailEl || !currentSlug) return;
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  detailEl.style.display = 'block';
+  detailEl.innerHTML = `<em>Cargando detalle del plan ${esc(planId)}...</em>`;
+  try {
+    const r = await fetch('/api/plans/' + encodeURIComponent(planId) + '?slug=' + encodeURIComponent(currentSlug));
+    const p = await r.json();
+    if(!r.ok){
+      detailEl.innerHTML = `<div class="toast toast-error">${humanError(p.detail, r.status)}</div>`;
+      return;
+    }
+    const badgeKind = p.status === 'completed' ? 'badge-teal' : (p.status === 'scheduled' ? 'badge-pink' : (p.status === 'pending' ? 'badge-ochre' : (p.status === 'cancelled' ? 'badge-coral' : 'badge-lavender')));
+    const transitions = (p.transitions && p.transitions.length)
+      ? p.transitions.map(t => `<li style="font-size:12px;"><code>${esc(t.from || 'inicio')}</code> ➔ <code>${esc(t.to)}</code> <span style="color:var(--color-muted);">${esc(t.timestamp || '')}</span></li>`).join('')
+      : `<li style="font-size:12px; color:var(--color-muted);">proposed ➔ ${esc(p.status)} (sin transiciones intermedias)</li>`;
+
+    detailEl.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:8px;">
+        <div>
+          <h3 style="margin:0; font-size:16px;">${esc(p.title)}</h3>
+          <small style="color:var(--color-muted);">ID: ${esc(p.id)}</small>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <span class="badge ${badgeKind}">${esc(p.status)}</span>
+          <button type="button" id="plans-detail-close" style="background:none; border:none; font-size:16px; cursor:pointer; color:var(--color-muted);" title="Cerrar">✕</button>
+        </div>
+      </div>
+      <div style="font-size:13px; line-height:1.6; margin-bottom:8px;">
+        <div><strong>Participantes:</strong> ${(p.participants || []).map(part => `<span class="badge badge-teal" style="font-size:11px;">${esc(part)}</span>`).join(' ') || '—'}</div>
+        <div><strong>Ubicación:</strong> ${esc(p.location || 's/lugar')}</div>
+        <div><strong>Programado para:</strong> ${esc(p.scheduled_for || 'Sin fecha')}</div>
+        <div><strong>Fuentes / Mensajes:</strong> ${(p.source_ids || []).map(s => `<span class="citation" style="cursor:pointer;" onclick="if(window.searchEvidence) window.searchEvidence('${esc(s)}');">[${esc(s)}]</span>`).join(' ') || '—'}</div>
+      </div>
+      <div style="border-top:1px solid var(--color-hairline-soft); padding-top:8px;">
+        <strong style="font-size:12px; display:block; margin-bottom:4px;">Historial de ciclo de vida (transiciones):</strong>
+        <ul style="margin:0; padding-left:18px;">${transitions}</ul>
+      </div>
+    `;
+    const closeBtn = qs('plans-detail-close');
+    if(closeBtn) closeBtn.addEventListener('click', () => { detailEl.style.display = 'none'; });
+  } catch(err) {
+    detailEl.innerHTML = `<div class="toast toast-error">Error al cargar el detalle del plan.</div>`;
+  }
+}
+
 if(qs('plans-load')) qs('plans-load').addEventListener('click', async ()=>{
-  if(!currentSlug){qs('plans-output').textContent='Sin dataset'; return;}
-  const status=qs('plans-status')?.value||''; const participant=qs('plans-participant')?.value||'';
-  const params=new URLSearchParams({slug: currentSlug});
+  const listEl = qs('plans-list');
+  const outEl = qs('plans-output');
+  const detailEl = qs('plans-detail');
+  if(detailEl) detailEl.style.display = 'none';
+  if(!currentSlug){
+    if(listEl) listEl.innerHTML = '<div class="toast toast-info">Seleccioná un dataset para ver planes.</div>';
+    if(outEl) outEl.textContent = 'Sin dataset';
+    return;
+  }
+  const status = qs('plans-status')?.value || '';
+  const participant = qs('plans-participant')?.value || '';
+  const params = new URLSearchParams({slug: currentSlug});
   if(status) params.set('status', status);
   if(participant) params.set('participant', participant);
+
   try{
-    const r=await fetch('/api/plans?'+params.toString()); const j=await r.json();
-    qs('plans-output').textContent=JSON.stringify(j,null,2);
-    if(r.ok && j.plans){
-      qs('plans-detail').innerHTML=j.plans.map(p=>`<div style="padding:8px; border:1px solid #eee; border-radius:8px; margin-top:6px;"><strong>${p.title}</strong> [${p.status}]<br/>${p.participants.join(', ')} — ${p.location||'s/lugar'}<br/><small>${p.source_ids.join(', ')}</small></div>`).join('');
+    const r = await fetch('/api/plans?' + params.toString());
+    const j = await r.json();
+    if(outEl) outEl.textContent = JSON.stringify(j, null, 2);
+    if(!r.ok){
+      if(listEl) listEl.innerHTML = `<div class="toast toast-error">${humanError(j.detail, r.status)}</div>`;
+      return;
     }
-  }catch(e){ qs('plans-output').textContent='Error cargando planes'; }
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const plans = j.plans || [];
+    if(!plans.length){
+      if(listEl) listEl.innerHTML = '<div class="toast toast-info">No se encontraron planes con los filtros seleccionados.</div>';
+      return;
+    }
+    if(listEl){
+      listEl.innerHTML = plans.map(p => {
+        const badgeKind = p.status === 'completed' ? 'badge-teal' : (p.status === 'scheduled' ? 'badge-pink' : (p.status === 'pending' ? 'badge-ochre' : (p.status === 'cancelled' ? 'badge-coral' : 'badge-lavender')));
+        return `
+          <div class="card" style="background:#fff; border:1px solid var(--color-hairline); padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:200px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <strong style="font-size:14px;">${esc(p.title)}</strong>
+                <span class="badge ${badgeKind}">${esc(p.status)}</span>
+              </div>
+              <div style="font-size:12px; color:var(--color-muted); margin-top:4px;">
+                ${(p.participants || []).join(', ')} · ${esc(p.location || 's/lugar')} · ${esc(p.scheduled_for || 'Sin fecha')}
+              </div>
+            </div>
+            <button type="button" class="btn-secondary plan-detail-btn" data-id="${esc(p.id)}" style="font-size:11px; padding:4px 10px;">Ver detalle</button>
+          </div>
+        `;
+      }).join('');
+      listEl.querySelectorAll('.plan-detail-btn').forEach(btn => {
+        btn.addEventListener('click', () => showPlanDetail(btn.getAttribute('data-id')));
+      });
+    }
+  }catch(e){
+    if(listEl) listEl.innerHTML = '<div class="toast toast-error">Error cargando planes</div>';
+  }
 });
 
 // Ops
-if(qs('ops-diagnose')) qs('ops-diagnose').addEventListener('click', loadDiagnose);
-const opsHealth=document.querySelector('#ops-health-check');
-if(opsHealth) opsHealth.addEventListener('click', loadDiagnose);
-const opsUpdate=qs('ops-update-check');
-if(opsUpdate) opsUpdate.addEventListener('click', async()=>{
-  try{ const r=await fetch('/api/update-check'); const j=await r.json(); alert(JSON.stringify(j,null,2)); }catch(e){ alert('Sin conexión'); }
+if(qs('ops-diagnose')) qs('ops-diagnose').addEventListener('click', async () => {
+  await loadDiagnose();
+  toast(qs('ops-output'), 'Diagnóstico actualizado con éxito.', 'success');
 });
-const opsBackup=qs('ops-backup');
-if(opsBackup) opsBackup.addEventListener('click', async()=>{
-  if(!currentSlug) return alert('Seleccioná dataset');
-  try{
-    const r=await fetch('/api/backup', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({slug: currentSlug})});
-    const j=await r.json();
-    qs('ops-output').textContent=JSON.stringify(j,null,2);
-    if(r.ok) toast(qs('ops-output'), 'Backup ok: '+ (j.path||j.backup),'success');
-    else toast(qs('ops-output'), humanError(j.detail, r.status),'error');
-  }catch(e){ toast(qs('ops-output'),'Error backup','error'); }
+const opsHealth = document.querySelector('#ops-health-check');
+if(opsHealth) opsHealth.addEventListener('click', async () => {
+  await loadDiagnose();
+  toast(qs('ops-output'), 'Verificación de salud completada.', 'success');
 });
-const restoreFile=qs('ops-restore-file');
-if(restoreFile) restoreFile.addEventListener('change', async e=>{
-  const file=e.target.files[0]; if(!file) return;
-  const fd=new FormData(); fd.append('file', file); fd.set('slug', currentSlug||'restored');
-  // use slug from current selection
-  try{
-    const r=await fetch('/api/restore', {method:'POST', body: fd});
-    // restore endpoint expects Form with file + slug query? Our app.py restore uses file + slug form
-    const j=await r.json(); qs('ops-output').textContent=JSON.stringify(j,null,2);
-    if(r.ok) { toast(qs('ops-output'),'Restore ok','success'); loadDatasets(); }
-    else toast(qs('ops-output'), humanError(j.detail, r.status),'error');
-  }catch(err){ toast(qs('ops-output'),'Error restore','error'); }
-  e.target.value='';
+
+const opsUpdate = qs('ops-update-check');
+if(opsUpdate) opsUpdate.addEventListener('click', async () => {
+  const badge = qs('ops-update-badge');
+  const out = qs('ops-output');
+  try {
+    const r = await fetch('/api/update-check');
+    const j = await r.json();
+    if(out) out.textContent = JSON.stringify(j, null, 2);
+    if(j.update_available){
+      if(badge){
+        badge.style.display = 'inline-block';
+        badge.className = 'badge badge-pink';
+        badge.textContent = `v${j.latest} disponible`;
+      }
+      toast(out, `⚠️ Actualización disponible: v${j.latest} (actual: v${j.current}).`, 'info');
+    } else {
+      if(badge){
+        badge.style.display = 'inline-block';
+        badge.className = 'badge badge-teal';
+        badge.textContent = `v${j.current} al día`;
+      }
+      const note = j.warning ? ` (${j.warning})` : '';
+      toast(out, `✅ LazoGraph está al día en la versión v${j.current}${note}.`, 'success');
+    }
+  } catch(e) {
+    if(badge){
+      badge.style.display = 'inline-block';
+      badge.className = 'badge badge-ochre';
+      badge.textContent = 'offline';
+    }
+    toast(out, 'Sin conexión — no se pudo verificar actualizaciones.', 'info');
+  }
 });
-// Fix restore: our app.py expects POST /api/restore with multipart file + slug form field, but route is POST /api/restore with file and slug as Form. Use fetch with FormData containing slug and file.
-if(qs('ops-logs')) qs('ops-logs').addEventListener('click', async()=>{
-  const out=qs('ops-logs-output'); if(!out) return;
-  try{
-    const r=await fetch('/api/logs'+(currentSlug?'?slug='+encodeURIComponent(currentSlug):'')); const j=await r.json();
-    out.style.display='block'; out.textContent=JSON.stringify(j,null,2);
-  }catch(e){ out.style.display='block'; out.textContent='Error logs'; }
+
+const opsBackup = qs('ops-backup');
+if(opsBackup) opsBackup.addEventListener('click', async () => {
+  const out = qs('ops-output');
+  if(!currentSlug){
+    toast(out, 'Seleccioná un dataset antes de realizar el backup.', 'error');
+    return;
+  }
+  try {
+    const r = await fetch('/api/backup', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({slug: currentSlug})
+    });
+    const j = await r.json();
+    if(out) out.textContent = JSON.stringify(j, null, 2);
+    if(r.ok){
+      toast(out, `📦 Backup creado exitosamente: ${j.path || j.backup || j.zip}`, 'success');
+    } else {
+      toast(out, humanError(j.detail, r.status), 'error');
+    }
+  } catch(e) {
+    toast(out, 'Error de red durante el backup.', 'error');
+  }
 });
-if(qs('ops-telemetry-toggle')) qs('ops-telemetry-toggle').addEventListener('click', async()=>{
-  try{
-    const cur=await (await fetch('/api/telemetry')).json();
-    const next=!cur.enabled;
-    const r=await fetch('/api/telemetry', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled: next})});
-    const j=await r.json(); qs('ops-telemetry-toggle').textContent='Telemetría: '+(j.enabled?'on':'off');
-  }catch(e){}
+
+const restoreFile = qs('ops-restore-file');
+if(restoreFile) restoreFile.addEventListener('change', async e => {
+  const out = qs('ops-output');
+  const file = e.target.files[0];
+  if(!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  if(currentSlug) fd.set('slug', currentSlug);
+  try {
+    const r = await fetch('/api/restore', {method: 'POST', body: fd});
+    const j = await r.json();
+    if(out) out.textContent = JSON.stringify(j, null, 2);
+    if(r.ok){
+      toast(out, `♻️ Dataset "${j.slug || currentSlug}" restaurado exitosamente.`, 'success');
+      await loadDatasets();
+    } else {
+      toast(out, humanError(j.detail, r.status), 'error');
+    }
+  } catch(err) {
+    toast(out, 'Error de red durante la restauración.', 'error');
+  }
+  e.target.value = '';
 });
-if(qs('ops-delete')) qs('ops-delete').addEventListener('click', async()=>{
-  if(!currentSlug) return;
-  const confirmSlug=prompt(`Para borrar "${currentSlug}" escribí el slug para confirmar:`);
-  if(confirmSlug!==currentSlug){ alert('Confirmación no coincide — cancelado'); return; }
-  try{
-    const r=await fetch('/api/datasets/'+encodeURIComponent(currentSlug)+'?confirm='+encodeURIComponent(currentSlug), {method:'DELETE'});
-    const j=await r.json(); qs('ops-output').textContent=JSON.stringify(j,null,2);
-    if(r.ok){ toast(qs('ops-output'),'Dataset borrado — movido a quarantine','success'); loadDatasets(); }
-    else toast(qs('ops-output'), humanError(j.detail, r.status),'error');
-  }catch(e){ toast(qs('ops-output'),'Error borrando','error'); }
+
+if(qs('ops-logs')) qs('ops-logs').addEventListener('click', async () => {
+  const out = qs('ops-logs-output');
+  if(!out) return;
+  try {
+    const r = await fetch('/api/logs' + (currentSlug ? '?slug=' + encodeURIComponent(currentSlug) : ''));
+    const j = await r.json();
+    out.style.display = 'block';
+    if(j.logs && j.logs.length){
+      out.textContent = j.logs.join('\n');
+    } else {
+      out.textContent = 'Sin registros en el log (lazograph.log está vacío).';
+    }
+  } catch(e) {
+    out.style.display = 'block';
+    out.textContent = 'Error cargando registros del log.';
+  }
+});
+
+if(qs('ops-telemetry-toggle')) qs('ops-telemetry-toggle').addEventListener('click', async () => {
+  const out = qs('ops-output');
+  try {
+    const cur = await (await fetch('/api/telemetry')).json();
+    const next = !cur.enabled;
+    const r = await fetch('/api/telemetry', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled: next})
+    });
+    const j = await r.json();
+    const btn = qs('ops-telemetry-toggle');
+    if(btn) btn.textContent = 'Telemetría: ' + (j.enabled ? 'on' : 'off');
+    toast(out, `Telemetría configurada como: ${j.enabled ? 'ACTIVA (opt-in)' : 'DESACTIVADA (offline)'}.`, 'success');
+  } catch(e) {
+    toast(out, 'Error al cambiar configuración de telemetría.', 'error');
+  }
+});
+
+if(qs('ops-delete')) qs('ops-delete').addEventListener('click', async () => {
+  const out = qs('ops-output');
+  if(!currentSlug){
+    toast(out, 'Seleccioná un dataset antes de borrar.', 'error');
+    return;
+  }
+  const confirmSlug = prompt(`⚠️ ATENCIÓN: Esta acción moverá el dataset a cuarentena.\nPara confirmar el borrado de "${currentSlug}", escribí su nombre exacto:`);
+  if(confirmSlug !== currentSlug){
+    toast(out, 'Operación cancelada — el texto ingresado no coincide con el slug.', 'info');
+    return;
+  }
+  try {
+    const r = await fetch('/api/datasets/' + encodeURIComponent(currentSlug) + '?confirm=' + encodeURIComponent(currentSlug), {method: 'DELETE'});
+    const j = await r.json();
+    if(out) out.textContent = JSON.stringify(j, null, 2);
+    if(r.ok){
+      toast(out, `🗑️ Dataset "${currentSlug}" eliminado correctamente (resguardado en cuarentena).`, 'success');
+      currentSlug = null;
+      await loadDatasets();
+    } else {
+      toast(out, humanError(j.detail, r.status), 'error');
+    }
+  } catch(e) {
+    toast(out, 'Error al eliminar el dataset.', 'error');
+  }
 });
 
 // health check button on cream card
-const healthBtn=document.querySelector('.card-cream .btn-secondary');
-if(healthBtn && !healthBtn.id) healthBtn.id='ops-health-check-legacy';
+const healthBtn = document.querySelector('.card-cream .btn-secondary');
+if(healthBtn && !healthBtn.id) healthBtn.id = 'ops-health-check-legacy';
 
 loadDatasets();
