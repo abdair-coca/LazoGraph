@@ -205,6 +205,27 @@ async function loadDiagnose(){
     if(kpiM) kpiM.textContent=msg;
     if(kpiP) kpiP.textContent=profiles;
     if(kpiG) kpiG.textContent=rels;
+
+    // Warm Intelligence badges and greeting on Inicio
+    const heroMsg=qs('hero-badge-messages'); if(heroMsg && msg!=='—') heroMsg.textContent=`${Number(msg).toLocaleString('es-ES')} recuerdos`;
+    const heroPpl=qs('hero-badge-people'); if(heroPpl && profiles!=='—') heroPpl.textContent=`${profiles} personas`;
+    const heroConn=qs('hero-badge-connections'); if(heroConn && rels!=='—') heroConn.textContent=`${rels} conexiones`;
+
+    const match=activeDatasets.find(d=>d.slug===currentSlug);
+    const personaName = match && (match.persona || match.name) ? (match.persona || match.name) : '';
+    const greetingEl=qs('inicio-greeting');
+    if(greetingEl){
+      const hour = new Date().getHours();
+      const timeStr = hour < 12 ? 'Buenos días' : (hour < 20 ? 'Buenas tardes' : 'Buenas noches');
+      greetingEl.textContent = personaName ? `${timeStr}, ${personaName}` : timeStr;
+    }
+    const highlightPersonTitle = qs('highlight-person-title');
+    const highlightPersonDesc = qs('highlight-person-desc');
+    if(highlightPersonTitle && activeParticipants && activeParticipants.length){
+      highlightPersonTitle.textContent = activeParticipants[0];
+      if(highlightPersonDesc) highlightPersonDesc.textContent = `${activeParticipants.length} personas identificadas en tus chats.`;
+    }
+
     const diag=qs('diagnose');
     if(diag) diag.textContent = `${health} — ${msg} mensajes, ${profiles} perfiles, ${vectors} vectores`;
     const raw=qs('diagnose-raw'); if(raw) raw.textContent=JSON.stringify(j,null,2);
@@ -224,10 +245,63 @@ if(qs('dataset-select')) qs('dataset-select').addEventListener('change', e=>{
   updateParticipantDatalist(match ? match.participants : []);
   loadDiagnose();
 });
-document.querySelectorAll('nav button').forEach(b=> b.addEventListener('click', ()=>{
+
+const tabAliasMap = {
+  'dashboard': 'inicio',
+  'timeline': 'history',
+  'search': 'explore',
+  'wiki': 'explore',
+  'plans': 'explore',
+  'ops': 'settings'
+};
+
+function activateTab(tabName, subview){
+  const realTab = tabAliasMap[tabName] || tabName;
   document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-  b.classList.add('active'); const tab=document.getElementById('tab-'+b.dataset.tab); if(tab) tab.classList.add('active');
+
+  const navBtn = document.querySelector(`nav button[data-tab="${realTab}"]`);
+  if(navBtn) navBtn.classList.add('active');
+
+  const tabEl = document.getElementById('tab-' + realTab);
+  if(tabEl) tabEl.classList.add('active');
+
+  const legacyTabEl = document.getElementById('tab-' + tabName);
+  if(legacyTabEl && legacyTabEl !== tabEl) legacyTabEl.classList.add('active');
+
+  if(realTab === 'explore'){
+    const targetSub = subview || (['search', 'wiki', 'plans'].includes(tabName) ? tabName : 'search');
+    activateExploreSubview(targetSub);
+  } else if(realTab === 'history'){
+    if(typeof loadTimeline === 'function') loadTimeline();
+  } else if(realTab === 'graph'){
+    const graphBtn = document.querySelector('[data-tab="graph"]');
+    if(graphBtn && typeof loadGraph === 'function') loadGraph();
+  }
+}
+
+function activateExploreSubview(subName){
+  document.querySelectorAll('.sub-nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.sub === subName);
+  });
+  document.querySelectorAll('.subview').forEach(v => v.style.display = 'none');
+  const targetEl = document.getElementById('subview-' + subName);
+  if(targetEl) targetEl.style.display = 'block';
+
+  if(subName === 'wiki'){
+    if(typeof loadWiki === 'function') loadWiki();
+  } else if(subName === 'plans'){
+    const loadBtn = qs('plans-load');
+    if(loadBtn) loadBtn.click();
+  }
+}
+
+document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', ()=>{
+  activateTab(b.dataset.tab);
+}));
+
+document.querySelectorAll('.sub-nav-btn').forEach(b => b.addEventListener('click', ()=>{
+  activateExploreSubview(b.dataset.sub);
 }));
 
 function renderImportPreview(j, target, equivOptId, equivModeName){
@@ -491,8 +565,7 @@ if(qs('search-form')) qs('search-form').addEventListener('submit', e=>{ e.preven
 if(qs('search-more')) qs('search-more').addEventListener('click', ()=> doSearch(false));
 const tabSearch=document.querySelector('[data-tab="search"]'); if(tabSearch) tabSearch.addEventListener('click', ()=> doSearch(true));
 
-const tabTimeline=document.querySelector('[data-tab="timeline"]');
-if(tabTimeline) tabTimeline.addEventListener('click', async ()=>{
+async function loadTimeline(){
   if(!currentSlug) return;
   try{
     const r=await fetch('/api/timeline?slug='+encodeURIComponent(currentSlug)+'&granularity=day');
@@ -506,19 +579,22 @@ if(tabTimeline) tabTimeline.addEventListener('click', async ()=>{
       const col=document.createElement('div'); col.style.cssText='flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;';
       const bar=document.createElement('div');
       bar.title=`${b.date}: ${b.count} — click para filtrar`;
-      bar.style.cssText=`width:100%; background:#347f78; height:${(b.count/max)*60+8}px; cursor:pointer; border-radius:6px; display:flex; align-items:end; justify-content:center; color:#fff; font-size:10px; transition:transform .1s;`;
+      bar.style.cssText=`width:100%; background:var(--color-person, #FF5C7A); height:${(b.count/max)*60+8}px; cursor:pointer; border-radius:6px; display:flex; align-items:end; justify-content:center; color:#fff; font-size:10px; transition:transform .1s;`;
       bar.textContent=b.count;
       bar.addEventListener('click', ()=>{
         searchFrom=b.date; searchTo=b.date;
-        const searchTab=document.querySelector('[data-tab="search"]');
-        if(searchTab) searchTab.click();
+        activateTab('explore', 'search');
         doSearch(true);
       });
       const label=document.createElement('div'); label.textContent=b.date.slice(5); label.style.fontSize='9px'; label.style.textAlign='center';
       col.appendChild(bar); col.appendChild(label); bars.appendChild(col);
     });
   }catch(e){ qs('timeline-raw').textContent='Error cargando timeline'; }
-});
+}
+const tabTimeline=document.querySelector('[data-tab="timeline"]');
+if(tabTimeline) tabTimeline.addEventListener('click', loadTimeline);
+const tabHistory=document.querySelector('[data-tab="history"]');
+if(tabHistory) tabHistory.addEventListener('click', loadTimeline);
 
 async function showGraphNodeDetail(id){
   const detail=qs('graph-detail');
@@ -545,8 +621,7 @@ async function showGraphNodeDetail(id){
   }
 }
 
-const tabGraph=document.querySelector('[data-tab="graph"]');
-if(tabGraph) tabGraph.addEventListener('click', async ()=>{
+async function loadGraph(){
   if(!currentSlug) return;
   try{
     const r=await fetch('/api/graph?slug='+encodeURIComponent(currentSlug)+'&format=json');
@@ -556,7 +631,7 @@ if(tabGraph) tabGraph.addEventListener('click', async ()=>{
     const container=qs('graph-container');
     if(!container) return;
     container.innerHTML='';
-    if(!j.nodes || !j.nodes.length){ container.innerHTML='<div class="toast toast-info">Sin nodos — importá un chat primero.</div>'; return; }
+    if(!j.nodes || !j.nodes.length){ container.innerHTML='<div class="toast toast-info">Sin conexiones en la memoria — importá un chat primero.</div>'; return; }
     const cleanEdges = (j.edges||[]).filter(e => !String(e.type||'').startsWith('plan_'));
     if(!window.cytoscape){
       let statsText = '';
@@ -567,13 +642,13 @@ if(tabGraph) tabGraph.addEventListener('click', async ()=>{
           statsText = ` (${st.entities||j.nodes.length} entidades, ${st.relationships||cleanEdges.length} relaciones)`;
         }
       }catch(_){}
-      container.innerHTML = `<div style="padding:14px; max-height:100%; overflow:auto;">
-        <div style="margin-bottom:8px; font-size:12px; color:var(--color-muted); font-weight:600;">Modo respaldo offline${statsText} — hacé click en un participante:</div>
+      container.innerHTML = `<div style="padding:16px; max-height:100%; overflow:auto;">
+        <div style="margin-bottom:8px; font-size:12px; color:var(--color-muted); font-weight:600;">Modo respaldo offline${statsText} — seleccioná una entidad:</div>
         <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">` +
-        j.nodes.map(n=>`<button type="button" class="btn-chip graph-node-fallback" data-id="${encodeURIComponent(n.id)}" style="background:#fff; border:1px solid var(--color-hairline); border-radius:999px; padding:4px 12px; font-size:12px; cursor:pointer;">${n.label||n.id}</button>`).join('') +
+        j.nodes.map(n=>`<button type="button" class="btn-chip graph-node-fallback" data-id="${encodeURIComponent(n.id)}" style="background:var(--color-surface); border:1px solid var(--color-hairline); border-radius:999px; padding:4px 12px; font-size:12px; cursor:pointer;">${n.label||n.id}</button>`).join('') +
         `</div>
         <div style="font-size:12px; line-height:1.6; max-height:220px; overflow:auto; border-top:1px solid var(--color-hairline-soft); padding-top:8px;">` +
-        (cleanEdges.length ? cleanEdges.map(e=>`<div><span class="badge badge-teal">${e.from}</span> ──<em>${e.type}</em>──▶ <span class="badge badge-teal">${e.to}</span></div>`).join('') : '<em style="color:var(--color-muted);">Sin relaciones directas</em>') +
+        (cleanEdges.length ? cleanEdges.map(e=>`<div><span class="badge badge-person">${e.from}</span> ──<em>${e.type}</em>──▶ <span class="badge badge-place">${e.to}</span></div>`).join('') : '<em style="color:var(--color-muted);">Sin relaciones directas</em>') +
         `</div></div>`;
       container.querySelectorAll('.graph-node-fallback').forEach(btn=>{
         btn.addEventListener('click', ()=> showGraphNodeDetail(decodeURIComponent(btn.getAttribute('data-id'))));
@@ -587,8 +662,8 @@ if(tabGraph) tabGraph.addEventListener('click', async ()=>{
         ...cleanEdges.map(e=>({data:{source:e.from, target:e.to, label:e.type}}))
       ],
       style:[
-        {selector:'node', style:{'label':'data(label)','background-color':'#347f78','color':'#fff','font-size':'10px','text-valign':'center','text-halign':'center'}},
-        {selector:'edge', style:{'label':'data(label)','curve-style':'bezier','target-arrow-shape':'triangle','font-size':'8px'}}
+        {selector:'node', style:{'label':'data(label)','background-color':'#FF5C7A','color':'#161616','font-size':'11px','font-weight':'600','text-valign':'bottom','text-margin-y':6,'width':28,'height':28}},
+        {selector:'edge', style:{'label':'data(label)','curve-style':'bezier','target-arrow-shape':'triangle','line-color':'#E2DACB','target-arrow-color':'#9D8FD1','font-size':'9px','color':'#6B665E'}}
       ],
       layout:{name:'cose', animate:false}
     });
@@ -597,7 +672,9 @@ if(tabGraph) tabGraph.addEventListener('click', async ()=>{
       showGraphNodeDetail(id);
     });
   }catch(e){ if(qs('graph-container')) qs('graph-container').innerHTML='<div class="toast toast-error">Error cargando grafo</div>'; }
-});
+}
+const tabGraph=document.querySelector('[data-tab="graph"]');
+if(tabGraph) tabGraph.addEventListener('click', loadGraph);
 
 function wireWikiEvidenceLinks(){
   const wc=qs('wiki-content');
@@ -626,8 +703,7 @@ window.searchEvidence = function(tag){
   doSearch(true);
 };
 
-const tabWiki=document.querySelector('[data-tab="wiki"]');
-if(tabWiki) tabWiki.addEventListener('click', async ()=>{
+async function loadWiki(){
   if(!currentSlug) return;
   try{
     const r=await fetch('/api/wiki?slug='+encodeURIComponent(currentSlug));
@@ -639,7 +715,7 @@ if(tabWiki) tabWiki.addEventListener('click', async ()=>{
       if(j.lint){
         const iss=j.lint.issues||0, wrn=j.lint.warnings||0;
         badge.textContent=`lint: ${iss} issues, ${wrn} warnings`;
-        badge.className=iss>0?'badge badge-pink':(wrn>0?'badge badge-ochre':'badge badge-teal');
+        badge.className=iss>0?'badge badge-person':(wrn>0?'badge badge-event':'badge badge-place');
         badge.style.display='inline-block';
       }else{
         badge.style.display='none';
@@ -651,7 +727,7 @@ if(tabWiki) tabWiki.addEventListener('click', async ()=>{
       let navHtml = '';
       if(j.pages.length > 1){
         navHtml = `<div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">` +
-          j.pages.map((p, idx)=>`<button type="button" class="btn-chip wiki-page-btn" data-page="${encodeURIComponent(p.name)}" style="background:${idx===0?'var(--color-brand-teal)':'#fff'}; color:${idx===0?'#fff':'inherit'}; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:12px; cursor:pointer;">${p.name}</button>`).join('') +
+          j.pages.map((p, idx)=>`<button type="button" class="btn-chip wiki-page-btn" data-page="${encodeURIComponent(p.name)}" style="background:${idx===0?'var(--color-ink)':'#fff'}; color:${idx===0?'#fff':'inherit'}; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:12px; cursor:pointer;">${p.name}</button>`).join('') +
           `</div>`;
       }
       async function loadPage(pageName){
@@ -670,7 +746,7 @@ if(tabWiki) tabWiki.addEventListener('click', async ()=>{
       container.querySelectorAll('.wiki-page-btn').forEach(btn=>{
         btn.addEventListener('click', ()=>{
           container.querySelectorAll('.wiki-page-btn').forEach(b=>{ b.style.background='#fff'; b.style.color='inherit'; });
-          btn.style.background='var(--color-brand-teal)'; btn.style.color='#fff';
+          btn.style.background='var(--color-ink)'; btn.style.color='#fff';
           loadPage(decodeURIComponent(btn.getAttribute('data-page')));
         });
       });
@@ -679,8 +755,10 @@ if(tabWiki) tabWiki.addEventListener('click', async ()=>{
       container.innerHTML='<div class="toast toast-info">Sin wiki — ejecutá build_wiki.py o rebuild_all.</div>';
     }
   }catch(e){ qs('wiki-raw').textContent='Error cargando wiki'; }
-});
-if(qs('wiki-load')) qs('wiki-load').addEventListener('click', ()=> tabWiki?.click());
+}
+const tabWiki=document.querySelector('[data-tab="wiki"]');
+if(tabWiki) tabWiki.addEventListener('click', loadWiki);
+if(qs('wiki-load')) qs('wiki-load').addEventListener('click', loadWiki);
 
 // Plans
 const tabPlans = document.querySelector('[data-tab="plans"]');

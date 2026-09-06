@@ -3,96 +3,272 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LazoGraph · UI local</title>
+<title>LazoGraph · Personal Memory Intelligence</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <header class="top-nav">
-  <div class="brand"><div class="brand-mark">◈</div> LazoGraph</div>
+  <div class="brand" onclick="document.querySelector('[data-tab=inicio]').click()"><div class="brand-mark">◈</div> LazoGraph</div>
   <nav class="nav-links">
-    <button data-tab="dashboard" class="active">Dashboard</button>
-    <button data-tab="import">Importar</button>
-    <button data-tab="ask">Preguntar</button>
-    <button data-tab="search">Buscar</button>
-    <button data-tab="timeline">Timeline</button>
-    <button data-tab="graph">Grafo</button>
-    <button data-tab="plans">Planes</button>
-    <button data-tab="wiki">Wiki</button>
-    <button data-tab="ops">Ops</button>
+    <div class="nav-group">
+      <button data-tab="inicio" class="active">Inicio</button>
+      <button data-tab="ask">Preguntar</button>
+      <button data-tab="explore">Explorar</button>
+    </div>
+    <span class="nav-divider"></span>
+    <div class="nav-group">
+      <button data-tab="history">Historia</button>
+      <button data-tab="graph">Grafo</button>
+    </div>
+    <span class="nav-divider"></span>
+    <div class="nav-group">
+      <button data-tab="import">Importar</button>
+      <button data-tab="settings">Ajustes</button>
+    </div>
   </nav>
-  <div class="dataset-select"><select id="dataset-select"><option>Cargando datasets…</option></select></div>
+  <div class="dataset-select"><select id="dataset-select"><option>Cargando memoria…</option></select></div>
 </header>
 
 <section class="hero">
   <div class="hero-copy">
-    <div class="hero-kicker">Local-first · sin red · tus recuerdos</div>
-    <h1>Tu grafo <em>personal</em>,<br/>con evidencia real.</h1>
-    <p>Importá chats, preguntá con citas verificables y explorá el grafo — todo queda en este dispositivo. Sin sync, sin envío, sin inventos.</p>
+    <div class="hero-kicker">Memoria personal · Local-first · Tus recuerdos</div>
+    <h1>Tu historia personal,<br/>con evidencia real.</h1>
+    <p>Conversaciones convertidas en una memoria explorable. Descubrí patrones, recordá momentos y hacé preguntas con citas verificables, 100% privado en tu dispositivo.</p>
     <div class="hero-ctas">
-      <button class="btn-primary" onclick="document.querySelector('[data-tab=import]').click()">Importar chat</button>
-      <button class="btn-secondary" onclick="document.querySelector('[data-tab=ask]').click()">Hacer una pregunta</button>
+      <button class="btn-primary" onclick="document.querySelector('[data-tab=ask]').click()">Hacer una pregunta</button>
+      <button class="btn-secondary" onclick="document.querySelector('[data-tab=explore]').click()">Explorar memoria</button>
     </div>
-    <p style="margin-top:12px; font-size:12px; color:var(--color-muted);">🔒 Todo permanece local · Modelo <strong>embeddinggemma-300m</strong> offline</p>
+    <p style="margin-top:14px; font-size:12px; color:var(--color-muted);">🔒 Privacidad absoluta · Procesado localmente sin conexión externa</p>
   </div>
   <div class="hero-illustration">
     <div class="clay-card">
       <div style="display:flex; align-items:center; gap:12px;">
-        <div class="clay-blob" style="background:var(--color-brand-pink); color:#fff;">◆</div>
-        <div><strong style="font-size:14px;">Preguntar al grafo</strong><br/><span style="color:var(--color-muted); font-size:12px;">Respuestas con citas verificables</span></div>
-        <span class="badge badge-teal" style="margin-left:auto;">local</span>
+        <div class="clay-blob" style="background:var(--color-person); color:#fff;">◆</div>
+        <div><strong style="font-size:14px;">Habla con tu historia</strong><br/><span style="color:var(--color-muted); font-size:12px;">Perspectivas basadas en conversaciones reales</span></div>
+        <span class="badge badge-place" style="margin-left:auto;">local</span>
       </div>
       <div style="margin-top:12px; padding:12px; background:var(--color-surface-soft); border-radius:12px; font-size:13px; color:var(--color-body);">
-        “¿Qué cosas le gustan a <strong>Alex</strong>?” → <em style="color:var(--color-brand-teal);">fotografía urbana, cafeterías, correr</em> <span style="color:var(--color-muted);">[chat.jsonl:2]</span>
+        “¿Qué cosas le gustan a <strong>Alex</strong>?” → <em style="color:var(--color-ink);">fotografía urbana, cafeterías, correr</em> <span style="color:var(--color-muted);">[chat.jsonl:2]</span>
       </div>
     </div>
     <div class="clay-card">
-      <div style="display:flex; gap:8px;">
-        <span class="badge">3.614 mensajes</span>
-        <span class="badge">18 personas</span>
-        <span class="badge badge-pink">127 relaciones</span>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <span class="badge badge-person" id="hero-badge-messages">3.614 recuerdos</span>
+        <span class="badge badge-place" id="hero-badge-people">18 personas</span>
+        <span class="badge badge-event" id="hero-badge-connections">127 conexiones</span>
       </div>
-      <div style="margin-top:12px; height:44px; background: linear-gradient(90deg, var(--color-brand-lavender) 0 32%, var(--color-brand-mint) 32% 62%, var(--color-brand-peach) 62% 84%, var(--color-brand-ochre) 84% 100%); border-radius:12px; opacity:.9;"></div>
+      <div style="margin-top:12px; height:24px; background: linear-gradient(90deg, var(--color-memory) 0 32%, var(--color-place) 32% 62%, var(--color-event) 62% 84%, var(--color-person) 84% 100%); border-radius:8px; opacity:.85;"></div>
     </div>
   </div>
 </section>
 
 <main>
-  <section id="tab-dashboard" class="tab active">
-    <div class="grid grid-3">
-      <div class="card card-cream"><div class="badge">Mensajes</div><div class="kpi" id="kpi-messages">—</div><p id="diagnose" style="color:var(--color-muted); font-size:13px;">Seleccioná un dataset.</p></div>
-      <div class="card card-mint"><div class="badge">Personas</div><div class="kpi" id="kpi-personas">—</div><p style="color:var(--color-muted); font-size:13px;">Identidad canónica + aliases</p></div>
-      <div class="card card-lavender"><div class="badge">Grafo</div><div class="kpi" id="kpi-graph">—</div><p style="color:var(--color-muted); font-size:13px;">Relaciones observadas</p></div>
+  <!-- TAB: INICIO (Principal) -->
+  <section id="tab-inicio" class="tab active">
+    <div style="margin-bottom:var(--spacing-lg);">
+      <div id="inicio-greeting" style="font-size:22px; font-weight:600; color:var(--color-ink); margin-bottom:4px;">Buenas tardes</div>
+      <div style="color:var(--color-muted); font-size:14px;">Hay conexiones y momentos en tu historia listos para explorar.</div>
     </div>
-    <div class="grid grid-2" style="margin-top:var(--spacing-lg);">
-      <div class="card">
-        <h3 style="margin:0 0 var(--spacing-sm); font-size:16px;">Actividad reciente</h3>
-        <div class="mockup"><div class="mockup-bar"><i></i><i></i><i></i></div><div style="height:6px; background:var(--color-hairline-soft); border-radius:999px; overflow:hidden;"><div style="width:72%; height:100%; background:var(--color-brand-pink);"></div></div><p style="font-size:12px; color:var(--color-muted); margin:8px 0 0;">Vectores 3.614 · KG 127 relaciones</p></div>
-        <pre id="diagnose-raw" style="margin-top:var(--spacing-sm); background:var(--color-surface-soft); padding:var(--spacing-md); border-radius:var(--radius-md); max-height:220px; overflow:auto; font-size:12px;"></pre>
+
+    <!-- Pregunta principal -->
+    <div class="card card-cream" style="margin-bottom:var(--spacing-lg);">
+      <h3 style="margin:0 0 8px; font-size:17px; font-weight:600;">¿Qué quieres entender hoy?</h3>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <input type="text" id="inicio-quick-q" class="input" placeholder="Pregúntame algo sobre tu vida..." style="flex:1;">
+        <button class="btn-primary" onclick="const q=document.getElementById('inicio-quick-q').value; if(q){ document.getElementById('ask-question').value=q; document.querySelector('[data-tab=ask]').click(); document.getElementById('ask-form').requestSubmit(); }">Preguntar</button>
       </div>
-      <div class="card card-ochre">
-        <h3 style="margin:0;">Atajo</h3>
-        <p>¿Primer uso? Usá el wizard guiado — preview no mutante antes de confirmar.</p>
-        <button class="btn-primary" onclick="document.querySelector('[data-tab=import]').click()" style="background:#0a0a0a;">Ir a importar</button>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--color-muted); align-items:center;">
+        <span>Sugerencias:</span>
+        <button type="button" class="btn-chip" onclick="document.getElementById('ask-question').value=this.textContent; document.querySelector('[data-tab=ask]').click();">¿Qué patrones se repiten en mis relaciones?</button>
+        <button type="button" class="btn-chip" onclick="document.getElementById('ask-question').value=this.textContent; document.querySelector('[data-tab=ask]').click();">¿Qué objetivos menciono con frecuencia?</button>
+        <button type="button" class="btn-chip" onclick="document.getElementById('ask-question').value=this.textContent; document.querySelector('[data-tab=ask]').click();">¿Qué planes pendientes tenemos?</button>
+      </div>
+    </div>
+
+    <!-- Tu Mundo — Preview interactivo -->
+    <div class="card" style="margin-bottom:var(--spacing-lg); overflow:hidden;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div>
+          <h3 style="margin:0; font-size:18px; font-weight:600;">Tu mundo</h3>
+          <p style="margin:2px 0 0; color:var(--color-muted); font-size:13px;">Exploración visual de personas, momentos y recuerdos conectados.</p>
+        </div>
+        <button class="btn-secondary" onclick="document.querySelector('[data-tab=graph]').click()">Ver en pantalla completa</button>
+      </div>
+      <div id="inicio-world-container" style="width:100%; height:320px; background:var(--color-surface-card); border-radius:var(--radius-lg); border:1px solid var(--color-hairline); display:grid; place-items:center; color:var(--color-muted);">
+        <div style="text-align:center;">
+          <div class="clay-blob" style="margin:0 auto 12px; background:var(--color-surface); border:1px solid var(--color-hairline);">◈</div>
+          <p style="margin:0; font-size:13px;">Cargando conexiones de tu memoria...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Para ti — Recuerdos y reflexiones destacadas -->
+    <div style="margin-bottom:var(--spacing-lg);">
+      <h3 style="font-size:18px; font-weight:600; margin:0 0 12px;">Para ti</h3>
+      <div class="grid grid-3">
+        <div class="card card-coral">
+          <span class="badge badge-person">Personas</span>
+          <h4 style="margin:10px 0 4px; font-size:15px;" id="highlight-person-title">Conexión activa</h4>
+          <p style="margin:0; font-size:13px; color:var(--color-body);" id="highlight-person-desc">Personas clave identificadas en tus conversaciones.</p>
+        </div>
+        <div class="card card-lavender">
+          <span class="badge badge-memory">Reflexión</span>
+          <h4 style="margin:10px 0 4px; font-size:15px;">Patrones observados</h4>
+          <p style="margin:0; font-size:13px; color:var(--color-body);">Temas y decisiones recurrentes a lo largo del tiempo.</p>
+        </div>
+        <div class="card card-gold">
+          <span class="badge badge-event">Compromisos</span>
+          <h4 style="margin:10px 0 4px; font-size:15px;" id="highlight-plans-title">Planes y momentos</h4>
+          <p style="margin:0; font-size:13px; color:var(--color-body);" id="highlight-plans-desc">Iniciativas y planes registrados en tus charlas.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resumen de actividad sutil + KPIs compatibles -->
+    <div class="card card-cream">
+      <div class="memory-counter">
+        <span class="memory-counter-dot"></span>
+        <span>Actividad de memoria:</span>
+        <strong id="kpi-messages">—</strong> recuerdos procesados
+        <span>·</span>
+        <strong id="kpi-personas">—</strong> personas conectadas
+        <span>·</span>
+        <strong id="kpi-graph">—</strong> conexiones observadas
+      </div>
+      <p id="diagnose" style="display:none;"></p>
+      <pre id="diagnose-raw" style="margin-top:var(--spacing-sm); background:var(--color-surface-soft); padding:var(--spacing-md); border-radius:var(--radius-md); max-height:160px; overflow:auto; font-size:11.5px; display:none;"></pre>
+    </div>
+  </section>
+
+  <!-- TAB: PREGUNTAR (Ask Lazo) -->
+  <section id="tab-ask" class="tab">
+    <div class="card">
+      <h2>Habla con tu historia</h2>
+      <p>Preguntas sobre tu vida con respuestas fundamentadas en tus conversaciones reales y citas verificables.</p>
+      <form id="ask-form" style="display:flex; gap:var(--spacing-sm); flex-wrap:wrap;">
+        <input type="text" id="ask-question" class="input" placeholder="¿Qué cosas le gustan a Alex?" required style="flex:1; min-width:220px;">
+        <input type="text" id="ask-about" class="input" placeholder="Sobre persona específica" list="ask-participants-datalist" style="width:220px;">
+        <datalist id="ask-participants-datalist"></datalist>
+        <button type="submit" class="btn-primary">Consultar</button>
+      </form>
+
+      <div id="ask-hints" style="margin-top:var(--spacing-xs); font-size:12px; color:var(--color-muted); display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <span>Ejemplos:</span>
+        <button type="button" class="btn-chip ask-hint" data-q="¿Qué cosas le gustan a {name}?">¿Qué le gusta a {name}?</button>
+        <button type="button" class="btn-chip ask-hint" data-q="¿Qué planes pendientes tenemos?">Planes pendientes</button>
+        <button type="button" class="btn-chip ask-hint" data-q="¿Cómo describirías nuestra relación con {name}?">Relación con {name}</button>
+      </div>
+
+      <!-- Pasos de indagación progresiva -->
+      <div id="ask-progress-steps" style="display:none; margin-top:var(--spacing-md);" class="inquiry-steps">
+        <div class="inquiry-step" id="step-search"><span>1.</span> Buscando conversaciones relevantes en tu historia...</div>
+        <div class="inquiry-step" id="step-people"><span>2.</span> Identificando personas y momentos conectados...</div>
+        <div class="inquiry-step" id="step-patterns"><span>3.</span> Analizando patrones y evidencia disponible...</div>
+        <div class="inquiry-step" id="step-response"><span>4.</span> Construyendo perspectiva fundamentada...</div>
+      </div>
+
+      <div id="ask-answer" style="margin-top:var(--spacing-md); padding:var(--spacing-md); background:var(--color-surface-soft); border-radius:var(--radius-md); min-height:48px;">
+        <p style="color:var(--color-muted); margin:0;">Escribí una pregunta para consultar tu memoria personal con evidencia verificable.</p>
+      </div>
+      <pre id="ask-raw" style="margin-top:var(--spacing-sm); background:var(--color-canvas); border:1px solid var(--color-hairline); padding:var(--spacing-sm); border-radius:var(--radius-md); max-height:220px; overflow:auto; display:none;"></pre>
+    </div>
+  </section>
+
+  <!-- TAB: EXPLORAR (Unificado: Mensajes, Temas, Planes) -->
+  <section id="tab-explore" class="tab">
+    <div class="card">
+      <h2>Explorar memoria</h2>
+      <p>Descubrí personas, temas, momentos y conversaciones en tu historia digital.</p>
+      
+      <div class="sub-nav">
+        <button class="sub-nav-btn active" data-sub="search">Buscar mensajes</button>
+        <button class="sub-nav-btn" data-sub="wiki">Temas e identidad</button>
+        <button class="sub-nav-btn" data-sub="plans">Planes y momentos</button>
+      </div>
+
+      <!-- Subvista: Buscar Mensajes -->
+      <div id="subview-search" class="subview">
+        <form id="search-form" style="display:flex; gap:var(--spacing-sm);">
+          <input type="text" id="search-query" class="input" placeholder="Buscar palabras clave, momentos o temas..." style="flex:1;">
+          <input type="text" id="search-participant" class="input" placeholder="Por persona..." style="width:200px;">
+          <button type="submit" class="btn-primary">Buscar</button>
+        </form>
+        <div id="search-results" style="margin-top:var(--spacing-md);"></div>
+        <button id="search-more" class="btn-secondary" style="display:none; margin-top:var(--spacing-sm);">Cargar más</button>
+        <pre id="search-raw" style="margin-top:var(--spacing-sm); display:none;"></pre>
+      </div>
+
+      <!-- Subvista: Wiki / Temas -->
+      <div id="subview-wiki" class="subview" style="display:none;">
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+          <button id="wiki-load" class="btn-secondary">Cargar páginas de temas</button>
+          <span id="wiki-lint-badge" class="badge"></span>
+        </div>
+        <div id="wiki-content" style="margin-top:var(--spacing-md);"></div>
+        <pre id="wiki-raw" style="margin-top:var(--spacing-sm); background:var(--color-surface-soft); padding:12px; border-radius:12px; max-height:200px; overflow:auto; display:none;"></pre>
+      </div>
+
+      <!-- Subvista: Planes -->
+      <div id="subview-plans" class="subview" style="display:none;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+          <select id="plans-status" class="input" style="width:160px; height:40px;">
+            <option value="">Todos los estados</option>
+            <option value="proposed">Propuestos</option>
+            <option value="pending">Pendientes</option>
+            <option value="scheduled">Programados</option>
+            <option value="completed">Completados</option>
+            <option value="cancelled">Cancelados</option>
+          </select>
+          <input id="plans-participant" class="input" placeholder="Filtrar por persona..." style="width:180px; height:40px;">
+          <button id="plans-load" class="btn-secondary">Cargar planes</button>
+        </div>
+        <div id="plans-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <div id="plans-detail" style="margin-top:8px; display:none; background:#fff; color:var(--color-ink); border-radius:var(--radius-md); padding:var(--spacing-md); border:1px solid var(--color-hairline);"></div>
+        <pre id="plans-output" style="margin-top:var(--spacing-sm); display:none;"></pre>
       </div>
     </div>
   </section>
 
+  <!-- TAB: HISTORIA (Timeline) -->
+  <section id="tab-history" class="tab">
+    <div class="card card-cream">
+      <h2>Historia</h2>
+      <p>Línea de tiempo de actividad. Hacé click en cualquier momento para ver las conversaciones asociadas.</p>
+      <div id="timeline-bars" style="display:flex; gap:6px; align-items:end; min-height:100px; padding:16px; background:var(--color-surface); border-radius:var(--radius-lg); border:1px solid var(--color-hairline);"></div>
+      <pre id="timeline-raw" style="margin-top:var(--spacing-sm); display:none;"></pre>
+    </div>
+  </section>
+
+  <!-- TAB: GRAFO -->
+  <section id="tab-graph" class="tab">
+    <div class="card">
+      <h2>Mapa de conexiones</h2>
+      <p>Vista espacial inmersiva. Seleccioná una persona o momento para explorar su historia relacionada.</p>
+      <div id="graph-container" style="width:100%; height:460px; background:var(--color-surface-card); border:1px solid var(--color-hairline); border-radius:var(--radius-xl); overflow:hidden;"></div>
+      <div id="graph-detail" style="margin-top:var(--spacing-sm); padding:var(--spacing-sm); background:var(--color-surface-soft); border-radius:var(--radius-md);">
+        <em>Hacé click en una entidad para ver sus conexiones y conversaciones.</em>
+      </div>
+      <pre id="graph-raw" style="margin-top:var(--spacing-sm); display:none;"></pre>
+    </div>
+  </section>
+
+  <!-- TAB: IMPORTAR -->
   <section id="tab-import" class="tab">
     <div class="grid grid-2">
       <div class="card card-peach">
         <h2>Importar chat</h2>
-        <p>WhatsApp / Telegram / Signal · preview con participantes, PII y equivalent guard.</p>
+        <p>WhatsApp / Telegram / Signal · Vista previa con participantes, detección de PII y reconciliación de duplicados.</p>
         <form id="import-form" style="display:grid; gap:var(--spacing-sm);">
           <input type="file" id="import-file" class="input" required>
-          <input type="text" id="import-persona" class="input" placeholder="Persona (ej. Samantha)" required>
-          <input type="text" id="import-adapter" class="input" placeholder="Adapter opcional">
-          <button type="submit" class="btn-primary">Preview</button>
+          <input type="text" id="import-persona" class="input" placeholder="Nombre de la persona focal (ej. Samantha)" required>
+          <input type="text" id="import-adapter" class="input" placeholder="Formato opcional (auto-detectado)">
+          <button type="submit" class="btn-primary">Analizar archivo</button>
         </form>
       </div>
       <div class="card">
-        <h3 style="margin-top:0;">Preview</h3>
+        <h3 style="margin-top:0;">Vista previa</h3>
         <div id="import-preview-container" style="background:var(--color-surface-soft); padding:var(--spacing-md); border-radius:var(--radius-md); min-height:120px; overflow:auto;">
-          <div id="import-preview">Esperando archivo…</div>
+          <div id="import-preview">Seleccioná un archivo para ver los participantes y detalles...</div>
           <div id="import-equivalent-options" style="display:none; margin-top:var(--spacing-sm); padding:var(--spacing-sm); background:#fff; border-radius:var(--radius-sm); border:1px solid var(--color-hairline);">
             <strong>Acción ante fuente equivalente:</strong>
             <label style="display:block; margin-top:6px; font-size:13px;"><input type="radio" name="import-equivalent-mode" value="none" checked> Detener sin modificar</label>
@@ -100,131 +276,74 @@
             <label style="display:block; margin-top:4px; font-size:13px;"><input type="radio" name="import-equivalent-mode" value="allow"> Permitir duplicado (importar como fuente adicional)</label>
           </div>
         </div>
-        <div id="import-progress" style="display:none; margin-top:8px; height:8px; background:var(--color-hairline); border-radius:999px; overflow:hidden;"><div id="import-progress-bar" style="width:0%; height:100%; background:var(--color-brand-pink); transition:width .3s;"></div></div>
+        <div id="import-progress" style="display:none; margin-top:8px; height:8px; background:var(--color-hairline); border-radius:999px; overflow:hidden;"><div id="import-progress-bar" style="width:0%; height:100%; background:var(--color-person); transition:width .3s;"></div></div>
         <div id="import-progress-status" style="display:none; font-size:12px; color:var(--color-muted); margin-top:4px;"></div>
         <button id="import-apply" class="btn-primary" style="display:none; margin-top:var(--spacing-sm); width:100%;">Confirmar importación</button>
-        <pre id="import-result" style="margin-top:var(--spacing-sm);"></pre>
+        <pre id="import-result" style="margin-top:var(--spacing-sm); display:none;"></pre>
       </div>
     </div>
   </section>
 
-  <section id="tab-ask" class="tab">
-    <div class="card">
-      <h2>Preguntar con evidencia</h2>
-      <p>Respuestas en español con citas <code>[sources/*.jsonl:linea]</code> y abstención si falta evidencia.</p>
-      <form id="ask-form" style="display:flex; gap:var(--spacing-sm); flex-wrap:wrap;">
-        <input type="text" id="ask-question" class="input" placeholder="¿Qué cosas le gustan a Alex?" required style="flex:1; min-width:220px;">
-        <input type="text" id="ask-about" class="input" placeholder="Sobre participante (--about)" list="ask-participants-datalist" style="width:210px;">
-        <datalist id="ask-participants-datalist"></datalist>
-        <button type="submit" class="btn-primary">Preguntar</button>
-      </form>
-      <div id="ask-hints" style="margin-top:var(--spacing-xs); font-size:12px; color:var(--color-muted); display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-        <span>Ejemplos:</span>
-        <button type="button" class="btn-chip ask-hint" data-q="¿Qué cosas le gustan a {name}?" style="background:none; border:1px solid var(--color-hairline); border-radius:999px; padding:2px 8px; font-size:11px; cursor:pointer;">¿Qué le gusta a {name}?</button>
-        <button type="button" class="btn-chip ask-hint" data-q="¿Qué planes pendientes tenemos?" style="background:none; border:1px solid var(--color-hairline); border-radius:999px; padding:2px 8px; font-size:11px; cursor:pointer;">Planes pendientes</button>
-        <button type="button" class="btn-chip ask-hint" data-q="¿Cómo describirías nuestra relación con {name}?" style="background:none; border:1px solid var(--color-hairline); border-radius:999px; padding:2px 8px; font-size:11px; cursor:pointer;">Relación con {name}</button>
-      </div>
-      <div id="ask-answer" style="margin-top:var(--spacing-md); padding:var(--spacing-md); background:var(--color-surface-soft); border-radius:var(--radius-md); min-height:48px;">
-        <p style="color:var(--color-muted); margin:0;">Escribí una pregunta para consultar la base de conocimiento con evidencia.</p>
-      </div>
-      <pre id="ask-raw" style="margin-top:var(--spacing-sm); background:var(--color-canvas); border:1px solid var(--color-hairline); padding:var(--spacing-sm); border-radius:var(--radius-md); max-height:240px; overflow:auto;"></pre>
-    </div>
-  </section>
-
-  <section id="tab-search" class="tab">
-    <div class="card">
-      <h2>Buscar</h2>
-      <form id="search-form" style="display:flex; gap:var(--spacing-sm);">
-        <input type="text" id="search-query" class="input" placeholder="proyecto, Alex..." style="flex:1;">
-        <input type="text" id="search-participant" class="input" placeholder="participante" style="width:180px;">
-        <button type="submit" class="btn-primary">Buscar</button>
-      </form>
-      <div id="search-results" style="margin-top:var(--spacing-md);"></div>
-      <button id="search-more" class="btn-secondary" style="display:none; margin-top:var(--spacing-sm);">Cargar más</button>
-      <pre id="search-raw" style="margin-top:var(--spacing-sm);"></pre>
-    </div>
-  </section>
-
-  <section id="tab-timeline" class="tab">
-    <div class="card card-ochre">
-      <h2>Timeline</h2>
-      <p>Click en una barra para filtrar búsqueda.</p>
-      <div id="timeline-bars" style="display:flex; gap:6px; align-items:end; min-height:90px; padding:12px; background:var(--color-canvas); border-radius:var(--radius-lg);"></div>
-      <pre id="timeline-raw" style="margin-top:var(--spacing-sm);"></pre>
-    </div>
-  </section>
-
-  <section id="tab-graph" class="tab">
-    <div class="card">
-      <h2>Grafo interactivo</h2>
-      <p>Hacé click en un nodo para ver citas. <span class="badge">effective graph</span></p>
-      <div id="graph-container" style="width:100%; height:400px; background:var(--color-canvas); border:1px solid var(--color-hairline); border-radius:var(--radius-xl); overflow:hidden;"></div>
-      <div id="graph-detail" style="margin-top:var(--spacing-sm); padding:var(--spacing-sm); background:var(--color-surface-soft); border-radius:var(--radius-md);"><em>Click en un nodo para ver citas</em></div>
-      <pre id="graph-raw" style="margin-top:var(--spacing-sm);"></pre>
-    </div>
-  </section>
-
-  <section id="tab-plans" class="tab">
-    <div class="card card-teal">
-      <h2>Planes</h2>
-      <p style="color:var(--color-on-dark-soft);">Extraídos de fuentes con estado y transiciones.</p>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <select id="plans-status" class="input" style="width:160px; height:40px;"><option value="">Todos</option><option value="proposed">proposed</option><option value="pending">pending</option><option value="scheduled">scheduled</option><option value="completed">completed</option><option value="cancelled">cancelled</option></select>
-        <input id="plans-participant" class="input" placeholder="Participante" style="width:160px; height:40px;">
-        <button id="plans-load" class="btn-secondary">Cargar planes</button>
-      </div>
-      <div id="plans-list" style="margin-top:var(--spacing-md); display:flex; flex-direction:column; gap:8px;"></div>
-      <div id="plans-detail" style="margin-top:8px; display:none; background:#fff; color:var(--color-ink); border-radius:var(--radius-md); padding:var(--spacing-md); border:1px solid var(--color-hairline);"></div>
-      <pre id="plans-output" style="margin-top:var(--spacing-sm); background:var(--color-canvas); color:var(--color-ink); padding:var(--spacing-sm); border-radius:var(--radius-md); max-height:200px; overflow:auto;"></pre>
-    </div>
-  </section>
-
-  <section id="tab-wiki" class="tab">
-    <div class="card">
-      <h2>Wiki</h2>
-      <div style="display:flex; gap:8px;">
-        <button id="wiki-load" class="btn-secondary">Cargar wiki</button>
-        <span id="wiki-lint-badge" class="badge" style="align-self:center;"></span>
-      </div>
-      <div id="wiki-content" style="margin-top:var(--spacing-md);"></div>
-      <pre id="wiki-raw" style="margin-top:var(--spacing-sm); background:var(--color-surface-soft); padding:12px; border-radius:12px; max-height:240px; overflow:auto;"></pre>
-    </div>
-  </section>
-
-  <section id="tab-ops" class="tab">
+  <!-- TAB: AJUSTES (Ops) -->
+  <section id="tab-settings" class="tab">
     <div class="grid grid-2">
-      <div class="card"><h3>Operaciones</h3>
+      <div class="card">
+        <h3>Memoria y datos</h3>
+        <p style="color:var(--color-muted); font-size:13px;">Gestión segura de copias de seguridad y estado de tus recuerdos.</p>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <button id="ops-diagnose" class="btn-secondary">Diagnose</button>
-          <button id="ops-backup" class="btn-secondary">Backup</button>
-          <label class="btn-secondary" style="cursor:pointer; display:inline-flex; align-items:center;">Restore <input type="file" id="ops-restore-file" accept=".zip" style="display:none;"></label>
-          <button id="ops-update-check" class="btn-secondary">Check update</button>
+          <button id="ops-diagnose" class="btn-secondary">Diagnóstico</button>
+          <button id="ops-backup" class="btn-secondary">Descargar copia</button>
+          <label class="btn-secondary" style="cursor:pointer; display:inline-flex; align-items:center;">Restaurar copia <input type="file" id="ops-restore-file" accept=".zip" style="display:none;"></label>
+          <button id="ops-update-check" class="btn-secondary">Buscar actualizaciones</button>
           <span id="ops-update-badge" class="badge" style="display:none;"></span>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button id="ops-logs" class="btn-secondary">Ver logs</button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;">
+          <button id="ops-logs" class="btn-secondary">Ver registros</button>
           <button id="ops-telemetry-toggle" class="btn-secondary">Telemetría: off</button>
-          <button id="ops-delete" class="btn-secondary" style="color:var(--color-error); border-color:var(--color-error);">Borrar dataset</button>
+          <button id="ops-delete" class="btn-secondary" style="color:var(--color-error); border-color:var(--color-error);">Eliminar memoria</button>
         </div>
-        <pre id="ops-output" style="margin-top:var(--spacing-sm); max-height:280px; overflow:auto; background:var(--color-surface-soft); padding:12px; border-radius:12px;"></pre>
-        <pre id="ops-logs-output" style="margin-top:var(--spacing-sm); max-height:200px; overflow:auto; display:none;"></pre>
+        <pre id="ops-output" style="margin-top:var(--spacing-sm); max-height:240px; overflow:auto; background:var(--color-surface-soft); padding:12px; border-radius:12px;"></pre>
+        <pre id="ops-logs-output" style="margin-top:var(--spacing-sm); max-height:180px; overflow:auto; display:none;"></pre>
       </div>
-      <div class="card card-cream"><h3>Salud</h3><p style="color:var(--color-muted);">Offline por defecto · Telemetría opt-in</p>
-        <div id="ops-health-detail" style="font-size:13px; margin-top:8px;"></div>
-        <button id="ops-health-check" class="btn-secondary" style="margin-top:12px;">Verificar salud</button>
+      <div class="card card-cream">
+        <h3>Privacidad y tranquilidad</h3>
+        <p style="color:var(--color-body); font-size:13.5px; line-height:1.6;">
+          LazoGraph opera bajo el principio <strong>Local-first</strong>. Tus conversaciones, análisis e índices vectoriales nunca abandonan este equipo.
+        </p>
+        <div id="ops-health-detail" style="font-size:13px; margin-top:12px;"></div>
+        <button id="ops-health-check" class="btn-secondary" style="margin-top:14px;">Verificar estado local</button>
       </div>
     </div>
   </section>
 
+  <!-- Legacy Compatibility Section (hidden, to anchor legacy tab targets if needed) -->
+  <div style="display:none;" id="legacy-nav-proxies">
+    <button data-tab="dashboard"></button>
+    <button data-tab="search"></button>
+    <button data-tab="timeline"></button>
+    <button data-tab="plans"></button>
+    <button data-tab="wiki"></button>
+    <button data-tab="ops"></button>
+    <section id="tab-dashboard" class="tab"></section>
+    <section id="tab-search" class="tab"></section>
+    <section id="tab-timeline" class="tab"></section>
+    <section id="tab-plans" class="tab"></section>
+    <section id="tab-wiki" class="tab"></section>
+    <section id="tab-ops" class="tab"></section>
+  </div>
+
   <section class="cta-band">
-    <div><h3 style="margin:0; font-family:'Plain Black', Inter, sans-serif; font-size:24px; letter-spacing:-0.5px;">Todo queda en este dispositivo.</h3><p style="margin:6px 0 0; color:var(--color-body);">Sin sync externo. Exportá con redacción PII cuando quieras compartir.</p></div>
-    <button class="btn-primary" onclick="document.querySelector('[data-tab=ops]').click()">Ver operaciones</button>
+    <div>
+      <h3 style="margin:0; font-size:20px; font-weight:600; letter-spacing:-0.3px;">Tus recuerdos permanecen contigo.</h3>
+      <p style="margin:4px 0 0; color:var(--color-body); font-size:14px;">Sin servidores externos ni suscripciones en la nube. Exportá o respaldá cuando quieras.</p>
+    </div>
+    <button class="btn-primary" onclick="document.querySelector('[data-tab=settings]').click()">Configurar ajustes</button>
   </section>
 </main>
 
 <footer class="footer">
-  <span>© 2026 LazoGraph · Local-first</span>
-  <span><a href="/api/health">health</a> · <a href="https://www.clay.com" target="_blank" rel="noopener">inspirado en Clay</a></span>
+  <span>© 2026 LazoGraph · Personal Memory Intelligence</span>
+  <span><a href="/api/health">Salud del sistema</a> · Local-first</span>
 </footer>
 
 <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>

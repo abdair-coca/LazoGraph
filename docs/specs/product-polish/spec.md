@@ -1,10 +1,10 @@
 # Spec: product-polish
 
-> Source: `src/lazograph/ui/app.py:60-853`, `src/lazograph/ui/templates/base.html:12-186`, `src/lazograph/ui/static/app.js:1-156`, `src/lazograph/domain/answer.py:10-63`, `docs/ARCHITECTURE.md:37-79`, `docs/OPERATIONS.md:397-433`, `docs/specs/product-ux/spec.md:1-48`, `docs/specs/product-hardening/spec.md:1-45`, `docs/specs/product-distribution/spec.md:1-45`
+> Source: `docs/lazograph-context-pack/*`, `src/lazograph/ui/app.py:60-853`, `src/lazograph/ui/templates/base.html`, `src/lazograph/ui/static/app.js`, `src/lazograph/domain/answer.py`, `docs/ARCHITECTURE.md`, `docs/OPERATIONS.md`
 > Change: `docs/changes/product-polish`
-> Mode: single consolidated spec, 4 vertical slices (A-D)
+> Mode: single consolidated spec, functional foundation (Slices A-D) + UX/UI transformation (Slices E-H)
 
-Resumen ES: Cerrar LazoGraph como producto usable por cualquiera. Todos los botones funcionan con estados humanos, respuestas se interpretan en secciones con evidencia, y cada flujo vertical queda verificado E2E sin requerir docs.
+Resumen ES: Consolidar LazoGraph como experiencia premium de **Personal Memory Intelligence** ("Warm Intelligence"). Se mantiene el motor funcional y hardening verificado (import, ask, timeline, graph, ops), transformando la UI/UX: reemplazo de la navegación técnica de 9 tabs por una Arquitectura de Información humana (Inicio, Preguntar, Explorar, Historia, Grafo, Importar, Ajustes), paleta Warm Cream con acentos semánticos, dashboard centrado en "Tu mundo" (grafo vivo) y "Para ti" (recuerdos y patrones), y experiencia de Ask con perspectiva reflexiva y evidencia interactiva verificable.
 
 ---
 
@@ -43,6 +43,41 @@ Resumen ES: Cerrar LazoGraph como producto usable por cualquiera. Todos los boto
 ### REQ-PP-011: Copy humano en todos los estados
 Todo empty/loading/error SHALL mostrar copy humano ES (no stack): "No hay datasets — importá tu chat", "Archivo muy grande (20MB)", "Equivalente detectado — revisá antes de confirmar", "Sin evidencia suficiente — probá reformular", "Sin conexión". Detalle técnico SHALL ir a `logs`/`#raw` colapsable. UI SHALL distinguir loading (spinner/disabled), success (badge verde), error (badge rojo + acción siguiente).
 
+### REQ-PP-012: Design System — Warm Intelligence
+La interfaz SHALL implementar la paleta y estilo definidos en `docs/lazograph-context-pack/DESIGN_SYSTEM.md`:
+- Base: Warm Cream (`#F5F1E8`), Texto e Ink (`#161616`), Coral (`#FF5C7A`), Lavender (`#9D8FD1`), Sage (`#9FC5B7`), Gold (`#F4C65D`).
+- Uso semántico: Personas → Coral; Recuerdos → Lavender; Lugares → Sage; Eventos → Gold; Navegación/IA → Ink.
+- Tipografía editorial tranquila, bordes suaves, radios generosos, elevación sutil con sombras suaves, layouts abiertos sin cajas innecesarias.
+- Prohibida la terminología técnica interna en la UI principal (nodos, aristas, embeddings, vectores, clusters); reemplazada por términos humanos (personas, recuerdos, momentos, historia, conexiones, patrones).
+
+### REQ-PP-013: Arquitectura de Información Humana
+La navegación SHALL reemplazar los 9 tabs planos anteriores (`dashboard, import, ask, search, timeline, graph, plans, wiki, ops`) por la estructura agrupada de `docs/lazograph-context-pack/INFORMATION_ARCHITECTURE.md`:
+1. **Principal**:
+   - `Inicio`: puerta de entrada personal, saludo, pregunta inspiradora, grafo vivo y recuerdos destacados.
+   - `Preguntar`: espacio reflexivo para dialogar con la propia historia ("Habla con tu historia").
+   - `Explorar`: vista unificada de descubrimiento con subniveles (Personas, Temas, Lugares, Eventos, Recuerdos).
+2. **Tu historia**:
+   - `Historia`: timeline interactivo y contextual.
+   - `Grafo`: vista espacial e inmersiva del mundo personal.
+3. **Datos y Sistema**:
+   - `Importar`: flujo de entrada guiado de nuevas fuentes.
+   - `Ajustes`: estado de salud, privacidad, backup, restore y configuración (ex Ops).
+
+### REQ-PP-014: Inicio — "Tu Mundo" y Recuerdos Destacados
+El dashboard de `Inicio` SHALL estructurarse según `docs/lazograph-context-pack/DASHBOARD.md`:
+- Saludo contextual cálido basado en la persona activa.
+- Pregunta principal visible ("¿Qué quieres entender hoy?") con sugerencias clickeables.
+- Componente central "Tu Mundo": grafo interactivo y vivo como protagonista visual, con nodos diferenciados (emojis/avatares y colores por entidad).
+- Sección "Para ti": tarjetas de recuerdos destacados, patrones detectados o reflexiones extraídas de las conversaciones.
+- Actividad de memoria sutil (ej. "4.932 recuerdos procesados · 4 personas conectadas") en lugar de tarjetas KPI corporativas invasivas.
+
+### REQ-PP-015: Ask Lazo — Reflexión y Trazabilidad de Evidencia
+La experiencia de consulta SHALL estructurarse según `docs/lazograph-context-pack/ASK_LAZO.md`:
+- Naming humano: "Preguntar" o "Habla con tu historia" (nunca "Preguntar al grafo").
+- Indicador de progreso por etapas comprensibles durante la consulta (ej. *Buscando conversaciones relevantes → Personas relacionadas → Momentos importantes → Analizando patrones → Construyendo respuesta*).
+- Estructura de respuesta legible: Conclusión directa, Lo que encontré (patrones/hechos), Evidencia interactiva (navegable de afirmación a conversación y mensaje original), Mi perspectiva (reflexión o consejo) y Explorar más (preguntas sugeridas).
+- Humildad epistemológica: abstención clara cuando falte evidencia, sin inventar ni simular certeza.
+
 ---
 
 ## Scenarios
@@ -57,15 +92,20 @@ Given dataset sample existe
 When `POST /api/import/preview` con backup equivalente (>95% overlap)
 Then preview muestra `equivalent_sources` y `POST /api/import/apply` sin flag → 422 humano, con `reconcile_equivalent_source` → quarantine + rebuild ok
 
-### Scenario: Ask interpretado con citas
+### Scenario: Ask interpretado con perspectiva y citas
 Given dataset con mensajes Alex/Samantha
 When `POST /api/ask {question:"¿Qué le gusta a Alex?", about:"Alex"}` 
-Then UI muestra Text + Facts + Interpretación + Citations `[chat.jsonl:2]` clickeables → search filtra participant, confidence badge, retrieval_summary en debug; `POST /api/ask` con pregunta sin evidencia → abstención humana sin citas inventadas
+Then UI muestra conclusión directa, hechos encontrados, citas interactivas clickeables que abren el mensaje original en el panel de búsqueda, y perspectiva/sugerencias; si no hay evidencia suficiente → abstención humana ("No encontré evidencia suficiente en tus conversaciones...") sin inventar citas.
 
-### Scenario: Ask routing sin about
-Given pregunta "¿Qué relación tengo con Alex?" sin about
-When `POST /api/ask`
-Then resuelve persona dataset + Alex y devuelve relationship con path y hechos separados
+### Scenario: Navegación por Arquitectura de Información Humana
+Given usuario en la interfaz
+When observa la barra de navegación
+Then visualiza las secciones agrupadas (Inicio, Preguntar, Explorar, Historia, Grafo, Importar, Ajustes) sin ver pestañas técnicas fragmentadas como "Wiki", "Ops" o "Planes".
+
+### Scenario: Dashboard Inicio con Tu Mundo y Para Ti
+Given dataset cargado con participantes y conexiones
+When usuario abre Inicio
+Then visualiza saludo contextual, el buscador reflexivo, el componente "Tu Mundo" con el grafo vivo interactivo en el centro, y tarjetas "Para ti" con recuerdos o patrones destacados.
 
 ### Scenario: Search pagination sin overlap
 Given 25 mensajes con "proyecto" de Alex
@@ -86,16 +126,6 @@ Then panel muestra `GET /api/search?participant=Alex` citas y corrections activa
 Given cytoscape bloqueado
 When `GET /api/graph` 
 Then UI muestra lista nodos/edges + stats sin crash
-
-### Scenario: Wiki link + lint
-Given `wiki/identity.md` con evidence tags
-When `GET /api/wiki?slug=sample` luego `GET /api/wiki/identity.md?slug=sample`
-Then HTML renderizado + evidence links a search + lint `{issues,warnings}`
-
-### Scenario: Plans filtros
-Given plans con status pending/scheduled
-When `GET /api/plans?status=pending&participant=Alex` y `GET /api/plans/{id}`
-Then lista filtrada y detail con transitions `proposed→pending`, location, source_ids
 
 ### Scenario: Ops + backup round-trip + delete
 Given dataset healthy `sam`
