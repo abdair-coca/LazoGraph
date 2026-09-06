@@ -118,3 +118,61 @@ def test_progress_endpoint(tmp_path, monkeypatch):
     assert r.status_code in (200, 404)
     if r.status_code == 200:
         assert "pct" in r.json() or "progress" in r.json()
+
+
+def test_timeline_date_filter(tmp_path, monkeypatch):
+    """REQ-PUX-003: timeline with from_date and to_date filtering."""
+    root = tmp_path / "knowledge"
+    root.mkdir()
+    monkeypatch.setenv("OPENPERSONA_KNOWLEDGE", str(root))
+    _make_min_dataset(root)
+    client = TestClient(create_app())
+    # Query only second day: 2026-08-11
+    r = client.get("/api/timeline", params={"slug": "sample", "granularity": "day", "from_date": "2026-08-11", "to_date": "2026-08-11"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["buckets"]) == 1
+    assert body["buckets"][0]["date"] == "2026-08-11"
+    assert body["buckets"][0]["count"] == 15
+    assert body["total"] == 15
+
+
+def test_search_date_filter(tmp_path, monkeypatch):
+    """REQ-PUX-002: search filtering with from_date and to_date."""
+    root = tmp_path / "knowledge"
+    root.mkdir()
+    monkeypatch.setenv("OPENPERSONA_KNOWLEDGE", str(root))
+    _make_min_dataset(root)
+    client = TestClient(create_app())
+    r = client.get("/api/search", params={"slug": "sample", "from_date": "2026-08-10", "to_date": "2026-08-10", "limit": 50})
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert j["total"] == 10
+    assert all(res["timestamp"].startswith("2026-08-10") for res in j["results"])
+
+
+def test_wiki_evidence_links(tmp_path, monkeypatch):
+    """REQ-PUX-005: wiki pages transform evidence tags into clickable links."""
+    root = tmp_path / "knowledge"
+    root.mkdir()
+    monkeypatch.setenv("OPENPERSONA_KNOWLEDGE", str(root))
+    _make_min_dataset(root)
+    client = TestClient(create_app())
+    r = client.get("/api/wiki/identity.md", params={"slug": "sample"})
+    assert r.status_code == 200, r.text
+    assert 'class="citation wiki-evidence-link"' in r.text
+    assert 'data-tag="chat.jsonl:1"' in r.text
+
+
+def test_graph_stats_endpoint(tmp_path, monkeypatch):
+    """REQ-PUX-004: graph/stats endpoint returns entity and relationship counts."""
+    root = tmp_path / "knowledge"
+    root.mkdir()
+    monkeypatch.setenv("OPENPERSONA_KNOWLEDGE", str(root))
+    _make_min_dataset(root)
+    client = TestClient(create_app())
+    r = client.get("/api/graph/stats", params={"slug": "sample"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "entities" in body
+    assert "relationships" in body

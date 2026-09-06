@@ -20,12 +20,12 @@
 
 ## Slice C — Explorar (REQ-PP-003, PP-004, PP-005, PP-006)
 
-- [ ] **C1** Fix `static/app.js:65` search: add `from/to` filter state from timeline, virtualized list or pagination correct, human empty state, `has_more` check.
-- [ ] **C2** Fix `static/app.js:87` timeline: `GET /api/timeline?granularity=day` buckets render + click sets `searchFrom/To = b.date` + `document.querySelector('[data-tab=search]').click()` + `doSearch(true)` with date params.
-- [ ] **C3** Fix `static/app.js:113` graph: inject `GET /api/graph?format=json`, filter `plan_*` edges, `cytoscape` CDN fallback to list + `GET /api/graph/stats`, click node → `GET /api/search?participant=id` panel sin leak.
-- [ ] **C4** Fix `templates/base.html:157` wiki: add `id="wiki-load"` + `id="wiki-content"` handler, ensure `GET /api/wiki` lint badge `issues/warnings` visible, `GET /api/wiki/{page}` evidence tags link.
-- [ ] **C5** Populate `static/app.js:14` `loadDiagnose()` KPIs `kpi-messages/personas/graph` from diagnose `sources.messages` etc.
-- [ ] **C6** Tests: `tests/test_product_ux.py` must pass `test_search_pagination`, `test_timeline_aggregation`, `test_graph_json`, `test_wiki_render` after fixes.
+- [x] **C1** Fix `static/app.js:65` search: add `from/to` filter state from timeline, virtualized list or pagination correct, human empty state, `has_more` check.
+- [x] **C2** Fix `static/app.js:87` timeline: `GET /api/timeline?granularity=day` buckets render + click sets `searchFrom/To = b.date` + `document.querySelector('[data-tab=search]').click()` + `doSearch(true)` with date params.
+- [x] **C3** Fix `static/app.js:113` graph: inject `GET /api/graph?format=json`, filter `plan_*` edges, `cytoscape` CDN fallback to list + `GET /api/graph/stats`, click node → `GET /api/search?participant=id` panel sin leak.
+- [x] **C4** Fix `templates/base.html:157` wiki: add `id="wiki-load"` + `id="wiki-content"` handler, ensure `GET /api/wiki` lint badge `issues/warnings` visible, `GET /api/wiki/{page}` evidence tags link.
+- [x] **C5** Populate `static/app.js:14` `loadDiagnose()` KPIs `kpi-messages/personas/graph` from diagnose `sources.messages` etc.
+- [x] **C6** Tests: `tests/test_product_ux.py` must pass `test_search_pagination`, `test_timeline_aggregation`, `test_graph_json`, `test_wiki_render` after fixes.
 
 ## Slice D — Operar (REQ-PP-007, PP-008, PP-009, PP-010 resto)
 

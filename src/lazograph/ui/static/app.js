@@ -199,11 +199,12 @@ async function loadDiagnose(){
     const msg=j.sources ? j.sources.messages : '—';
     const profiles=j.participants ? j.participants.profiles : '—';
     const vectors=j.vectors ? j.vectors.count : '—';
+    const rels=(j.kg && j.kg.relationships !== undefined) ? j.kg.relationships : ((j.graph && j.graph.relationships !== undefined) ? j.graph.relationships : (vectors !== '—' ? vectors : '—'));
     const health=j.ok ? '✅ Saludable' : (j.status||'');
     const kpiM=qs('kpi-messages'), kpiP=qs('kpi-personas'), kpiG=qs('kpi-graph');
     if(kpiM) kpiM.textContent=msg;
     if(kpiP) kpiP.textContent=profiles;
-    if(kpiG) kpiG.textContent=j.graph ? (j.graph.relationships||vectors) : '—';
+    if(kpiG) kpiG.textContent=rels;
     const diag=qs('diagnose');
     if(diag) diag.textContent = `${health} — ${msg} mensajes, ${profiles} perfiles, ${vectors} vectores`;
     const raw=qs('diagnose-raw'); if(raw) raw.textContent=JSON.stringify(j,null,2);
@@ -421,10 +422,17 @@ document.querySelectorAll('.ask-hint').forEach(btn => {
 });
 
 let searchOffset=0, searchQuery="", searchParticipant="", searchHasMore=false;
+let seenSearchIds = new Set();
 async function doSearch(reset){
   if(!currentSlug){ toast(qs('search-results'),'Seleccioná un dataset','info'); return; }
-  if(reset){ searchOffset=0; const c=qs('search-results'); if(c) c.innerHTML=''; }
-  searchQuery=qs('search-query')?.value||""; searchParticipant=qs('search-participant')?.value||"";
+  const c=qs('search-results');
+  if(reset){
+    searchOffset=0;
+    seenSearchIds.clear();
+    if(c) c.innerHTML='';
+  }
+  searchQuery=qs('search-query')?.value||"";
+  searchParticipant=qs('search-participant')?.value||"";
   const params=new URLSearchParams({slug: currentSlug, query: searchQuery, limit: "10", offset: String(searchOffset)});
   if(searchParticipant) params.set('participant', searchParticipant);
   if(searchFrom) params.set('from_date', searchFrom);
@@ -432,26 +440,57 @@ async function doSearch(reset){
   try{
     const r=await fetch('/api/search?'+params.toString());
     const j=await r.json();
-    if(!r.ok){ toast(qs('search-results'), humanError(j.detail, r.status),'error'); return; }
+    if(!r.ok){ toast(c, humanError(j.detail, r.status),'error'); return; }
     qs('search-raw').textContent=JSON.stringify(j,null,2);
-    if(!j.results || !j.results.length){
-      if(reset) qs('search-results').innerHTML=`<div class="toast toast-info">Sin resultados para "${searchQuery||searchParticipant||'vacío'}" — probá sin acentos o con alias.</div>`;
-      qs('search-more').style.display='none'; return;
+
+    if(reset && (searchFrom || searchTo)){
+      const chip=document.createElement('div');
+      chip.style.cssText='margin-bottom:12px; display:inline-flex; align-items:center; gap:8px; background:var(--color-surface-soft); padding:4px 12px; border-radius:999px; font-size:12px; border:1px solid var(--color-hairline);';
+      chip.innerHTML=`<span>📅 Filtro fecha: <strong>${searchFrom || 'inicio'}</strong> a <strong>${searchTo || 'fin'}</strong></span> <button type="button" style="border:none; background:none; cursor:pointer; font-weight:bold; color:var(--color-brand-coral); padding:0 4px;" title="Quitar filtro">✕</button>`;
+      chip.querySelector('button').addEventListener('click', ()=>{
+        searchFrom=null; searchTo=null;
+        doSearch(true);
+      });
+      c.appendChild(chip);
     }
+
+    if(!j.results || !j.results.length){
+      if(reset){
+        const msg = (searchFrom || searchTo)
+          ? `Sin resultados para "${searchQuery||searchParticipant||'vacío'}" en el rango ${searchFrom||''}..${searchTo||''} — probá quitar el filtro de fecha.`
+          : `Sin resultados para "${searchQuery||searchParticipant||'vacío'}" — probá sin acentos o con alias.`;
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'toast toast-info';
+        emptyDiv.textContent = msg;
+        c.appendChild(emptyDiv);
+      }
+      qs('search-more').style.display='none';
+      return;
+    }
+
     j.results.forEach(ev=>{
+      if(seenSearchIds.has(ev.message_id)) return;
+      seenSearchIds.add(ev.message_id);
       const div=document.createElement('div');
-      div.style.cssText='padding:8px; border-bottom:1px solid #eee';
+      div.style.cssText='padding:10px 8px; border-bottom:1px solid var(--color-hairline-soft);';
       const safe=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      div.innerHTML=`<strong>${safe(ev.sender)}</strong> <small>${safe(ev.timestamp||'')}</small> <span class="citation">[${safe(ev.message_id)}]</span><br/>${safe(ev.excerpt||ev.content||'')}`;
-      qs('search-results').appendChild(div);
+      div.innerHTML=`<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
+        <div><strong>${safe(ev.sender)}</strong> <small style="color:var(--color-muted);">${safe(ev.timestamp||'')}</small></div>
+        <span class="citation" data-sender="${safe(ev.sender)}" data-mid="${safe(ev.message_id)}" style="cursor:pointer;">[${safe(ev.message_id)}]</span>
+      </div>
+      <div style="font-size:13px; color:var(--color-body);">${safe(ev.excerpt||ev.content||'')}</div>`;
+      c.appendChild(div);
     });
-    searchHasMore=j.has_more; searchOffset+=j.results.length;
+
+    searchHasMore=Boolean(j.has_more);
+    searchOffset+=j.results.length;
     qs('search-more').style.display=searchHasMore?'block':'none';
-  }catch(e){ toast(qs('search-results'),'Error de red','error'); }
+  }catch(e){ toast(c,'Error de red','error'); }
 }
 if(qs('search-form')) qs('search-form').addEventListener('submit', e=>{ e.preventDefault(); doSearch(true); });
 if(qs('search-more')) qs('search-more').addEventListener('click', ()=> doSearch(false));
 const tabSearch=document.querySelector('[data-tab="search"]'); if(tabSearch) tabSearch.addEventListener('click', ()=> doSearch(true));
+
 const tabTimeline=document.querySelector('[data-tab="timeline"]');
 if(tabTimeline) tabTimeline.addEventListener('click', async ()=>{
   if(!currentSlug) return;
@@ -467,11 +506,12 @@ if(tabTimeline) tabTimeline.addEventListener('click', async ()=>{
       const col=document.createElement('div'); col.style.cssText='flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;';
       const bar=document.createElement('div');
       bar.title=`${b.date}: ${b.count} — click para filtrar`;
-      bar.style.cssText=`width:100%; background:#347f78; height:${(b.count/max)*60+8}px; cursor:pointer; border-radius:6px; display:flex; align-items:end; justify-content:center; color:#fff; font-size:10px;`;
+      bar.style.cssText=`width:100%; background:#347f78; height:${(b.count/max)*60+8}px; cursor:pointer; border-radius:6px; display:flex; align-items:end; justify-content:center; color:#fff; font-size:10px; transition:transform .1s;`;
       bar.textContent=b.count;
       bar.addEventListener('click', ()=>{
         searchFrom=b.date; searchTo=b.date;
-        document.querySelector('[data-tab="search"]').click();
+        const searchTab=document.querySelector('[data-tab="search"]');
+        if(searchTab) searchTab.click();
         doSearch(true);
       });
       const label=document.createElement('div'); label.textContent=b.date.slice(5); label.style.fontSize='9px'; label.style.textAlign='center';
@@ -479,6 +519,32 @@ if(tabTimeline) tabTimeline.addEventListener('click', async ()=>{
     });
   }catch(e){ qs('timeline-raw').textContent='Error cargando timeline'; }
 });
+
+async function showGraphNodeDetail(id){
+  const detail=qs('graph-detail');
+  if(!detail) return;
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  detail.innerHTML=`<strong>${esc(id)}</strong> — cargando citas y correcciones...`;
+  try{
+    const [sRes, cRes] = await Promise.all([
+      fetch('/api/search?slug='+encodeURIComponent(currentSlug)+'&query=&participant='+encodeURIComponent(id)+'&limit=5&offset=0').then(r=>r.json()).catch(()=>({results:[]})),
+      fetch('/api/corrections?slug='+encodeURIComponent(currentSlug)).then(r=>r.json()).catch(()=>({corrections:[]}))
+    ]);
+    const quotes = (sRes.results||[]).map(e=>`<div style="margin-top:4px; font-size:12px; color:var(--color-body);">• <span class="citation" style="cursor:pointer;" data-mid="${esc(e.message_id)}">[${esc(e.message_id)}]</span> <em>"${esc(e.excerpt||'')}"</em></div>`).join('');
+    const corrs = (cRes.corrections||[]).filter(c=>c.subject===id || c.object===id || (c.target && c.target.includes(id)));
+    let corrsHtml = '';
+    if(corrs.length){
+      corrsHtml = `<div style="margin-top:8px; font-size:12px;"><strong>Correcciones activas (${corrs.length}):</strong>` +
+        corrs.map(c=>`<div style="color:var(--color-brand-coral); font-size:11px;">✏️ ${esc(c.predicate||c.action||'corrección')}: ${esc(c.object||c.replacement||'')}</div>`).join('') + `</div>`;
+    }
+    detail.innerHTML = `<div><strong>${esc(id)}</strong></div>` +
+      (quotes ? `<div style="margin-top:6px;"><strong>Citas verificables:</strong>${quotes}</div>` : '<div style="font-size:12px; color:var(--color-muted); margin-top:4px;">Sin citas para este participante</div>') +
+      corrsHtml;
+  }catch(_){
+    detail.innerHTML = `<strong>${esc(id)}</strong> — Error al cargar detalle.`;
+  }
+}
+
 const tabGraph=document.querySelector('[data-tab="graph"]');
 if(tabGraph) tabGraph.addEventListener('click', async ()=>{
   if(!currentSlug) return;
@@ -490,17 +556,35 @@ if(tabGraph) tabGraph.addEventListener('click', async ()=>{
     const container=qs('graph-container');
     if(!container) return;
     container.innerHTML='';
-    if(!j.nodes.length){ container.innerHTML='<div class="toast toast-info">Sin nodos — importá un chat primero.</div>'; return; }
+    if(!j.nodes || !j.nodes.length){ container.innerHTML='<div class="toast toast-info">Sin nodos — importá un chat primero.</div>'; return; }
+    const cleanEdges = (j.edges||[]).filter(e => !String(e.type||'').startsWith('plan_'));
     if(!window.cytoscape){
-      // fallback list
-      container.innerHTML='<div style="padding:12px;">'+ j.nodes.map(n=>`<span class="badge">${n.label}</span>`).join(' ')+ '<div style="margin-top:8px;">'+ j.edges.map(e=>`${e.from} --${e.type}--> ${e.to}`).join('<br/>') +'</div></div>';
+      let statsText = '';
+      try{
+        const stRes = await fetch('/api/graph/stats?slug='+encodeURIComponent(currentSlug));
+        if(stRes.ok){
+          const st = await stRes.json();
+          statsText = ` (${st.entities||j.nodes.length} entidades, ${st.relationships||cleanEdges.length} relaciones)`;
+        }
+      }catch(_){}
+      container.innerHTML = `<div style="padding:14px; max-height:100%; overflow:auto;">
+        <div style="margin-bottom:8px; font-size:12px; color:var(--color-muted); font-weight:600;">Modo respaldo offline${statsText} — hacé click en un participante:</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">` +
+        j.nodes.map(n=>`<button type="button" class="btn-chip graph-node-fallback" data-id="${encodeURIComponent(n.id)}" style="background:#fff; border:1px solid var(--color-hairline); border-radius:999px; padding:4px 12px; font-size:12px; cursor:pointer;">${n.label||n.id}</button>`).join('') +
+        `</div>
+        <div style="font-size:12px; line-height:1.6; max-height:220px; overflow:auto; border-top:1px solid var(--color-hairline-soft); padding-top:8px;">` +
+        (cleanEdges.length ? cleanEdges.map(e=>`<div><span class="badge badge-teal">${e.from}</span> ──<em>${e.type}</em>──▶ <span class="badge badge-teal">${e.to}</span></div>`).join('') : '<em style="color:var(--color-muted);">Sin relaciones directas</em>') +
+        `</div></div>`;
+      container.querySelectorAll('.graph-node-fallback').forEach(btn=>{
+        btn.addEventListener('click', ()=> showGraphNodeDetail(decodeURIComponent(btn.getAttribute('data-id'))));
+      });
       return;
     }
     const cy=cytoscape({
       container: container,
       elements: [
-        ...j.nodes.map(n=>({data:{id:n.id, label:n.label}})),
-        ...j.edges.map(e=>({data:{source:e.from, target:e.to, label:e.type}}))
+        ...j.nodes.map(n=>({data:{id:n.id, label:n.label||n.id}})),
+        ...cleanEdges.map(e=>({data:{source:e.from, target:e.to, label:e.type}}))
       ],
       style:[
         {selector:'node', style:{'label':'data(label)','background-color':'#347f78','color':'#fff','font-size':'10px','text-valign':'center','text-halign':'center'}},
@@ -510,14 +594,38 @@ if(tabGraph) tabGraph.addEventListener('click', async ()=>{
     });
     cy.on('tap','node', evt=>{
       const id=evt.target.id();
-      qs('graph-detail').innerHTML=`<strong>${id}</strong> — cargando citas...`;
-      fetch('/api/search?slug='+encodeURIComponent(currentSlug)+'&query=&participant='+encodeURIComponent(id)+'&limit=5&offset=0')
-        .then(r=>r.json()).then(j=>{
-          qs('graph-detail').innerHTML=`<strong>${id}</strong><br/>${(j.results||[]).map(e=>e.excerpt).join('<br/>')||'Sin citas'}`;
-        });
+      showGraphNodeDetail(id);
     });
   }catch(e){ if(qs('graph-container')) qs('graph-container').innerHTML='<div class="toast toast-error">Error cargando grafo</div>'; }
 });
+
+function wireWikiEvidenceLinks(){
+  const wc=qs('wiki-content');
+  if(!wc) return;
+  wc.querySelectorAll('.wiki-evidence-link, .citation').forEach(link=>{
+    link.addEventListener('click', e=>{
+      e.preventDefault();
+      const tag=link.getAttribute('data-tag') || link.textContent.replace(/[\[\]]/g,'').trim();
+      if(tag){
+        if(qs('search-query')) qs('search-query').value=tag;
+        if(qs('search-participant')) qs('search-participant').value='';
+        searchFrom=null; searchTo=null;
+        const tabSearch=document.querySelector('[data-tab="search"]');
+        if(tabSearch) tabSearch.click();
+        doSearch(true);
+      }
+    });
+  });
+}
+window.searchEvidence = function(tag){
+  if(qs('search-query')) qs('search-query').value=tag;
+  if(qs('search-participant')) qs('search-participant').value='';
+  searchFrom=null; searchTo=null;
+  const tabSearch=document.querySelector('[data-tab="search"]');
+  if(tabSearch) tabSearch.click();
+  doSearch(true);
+};
+
 const tabWiki=document.querySelector('[data-tab="wiki"]');
 if(tabWiki) tabWiki.addEventListener('click', async ()=>{
   if(!currentSlug) return;
@@ -527,13 +635,48 @@ if(tabWiki) tabWiki.addEventListener('click', async ()=>{
     if(!r.ok){ qs('wiki-raw').textContent=humanError(j.detail, r.status); return; }
     qs('wiki-raw').textContent=JSON.stringify(j,null,2);
     const badge=qs('wiki-lint-badge');
-    if(badge && j.lint) badge.textContent=`lint: ${j.lint.issues} issues, ${j.lint.warnings} warnings`;
+    if(badge){
+      if(j.lint){
+        const iss=j.lint.issues||0, wrn=j.lint.warnings||0;
+        badge.textContent=`lint: ${iss} issues, ${wrn} warnings`;
+        badge.className=iss>0?'badge badge-pink':(wrn>0?'badge badge-ochre':'badge badge-teal');
+        badge.style.display='inline-block';
+      }else{
+        badge.style.display='none';
+      }
+    }
+    const container=qs('wiki-content');
+    if(!container) return;
     if(j.pages && j.pages.length){
-      const page=j.pages[0].name;
-      const rp=await fetch('/api/wiki/'+encodeURIComponent(page)+'?slug='+encodeURIComponent(currentSlug));
-      qs('wiki-content').innerHTML=await rp.text();
+      let navHtml = '';
+      if(j.pages.length > 1){
+        navHtml = `<div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">` +
+          j.pages.map((p, idx)=>`<button type="button" class="btn-chip wiki-page-btn" data-page="${encodeURIComponent(p.name)}" style="background:${idx===0?'var(--color-brand-teal)':'#fff'}; color:${idx===0?'#fff':'inherit'}; border:1px solid var(--color-hairline); border-radius:999px; padding:3px 10px; font-size:12px; cursor:pointer;">${p.name}</button>`).join('') +
+          `</div>`;
+      }
+      async function loadPage(pageName){
+        try{
+          const rp=await fetch('/api/wiki/'+encodeURIComponent(pageName)+'?slug='+encodeURIComponent(currentSlug));
+          const pageHtml=await rp.text();
+          const viewer=qs('wiki-page-viewer');
+          if(viewer) viewer.innerHTML=pageHtml;
+          wireWikiEvidenceLinks();
+        }catch(_){
+          const viewer=qs('wiki-page-viewer');
+          if(viewer) viewer.innerHTML='<div class="toast toast-error">Error cargando página</div>';
+        }
+      }
+      container.innerHTML = navHtml + `<div id="wiki-page-viewer" style="background:#fff; border:1px solid var(--color-hairline); border-radius:12px; padding:16px; min-height:100px;">Cargando...</div>`;
+      container.querySelectorAll('.wiki-page-btn').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          container.querySelectorAll('.wiki-page-btn').forEach(b=>{ b.style.background='#fff'; b.style.color='inherit'; });
+          btn.style.background='var(--color-brand-teal)'; btn.style.color='#fff';
+          loadPage(decodeURIComponent(btn.getAttribute('data-page')));
+        });
+      });
+      await loadPage(j.pages[0].name);
     } else {
-      qs('wiki-content').innerHTML='<div class="toast toast-info">Sin wiki — ejecutá build_wiki.py o rebuild_all.</div>';
+      container.innerHTML='<div class="toast toast-info">Sin wiki — ejecutá build_wiki.py o rebuild_all.</div>';
     }
   }catch(e){ qs('wiki-raw').textContent='Error cargando wiki'; }
 });

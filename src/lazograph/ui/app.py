@@ -511,7 +511,13 @@ def create_app() -> FastAPI:
         return {"results": sliced, "total": total, "has_more": (offset + limit) < total, "limit": limit, "offset": offset}
 
     @app.get("/api/timeline")
-    def timeline(slug: str, granularity: str = "day", participant: str | None = None) -> dict:
+    def timeline(
+        slug: str,
+        granularity: str = "day",
+        participant: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+    ) -> dict:
         try:
             dataset_dir = resolve_dataset(slug)
         except Exception as exc:
@@ -535,6 +541,10 @@ def create_app() -> FastAPI:
                         continue
                     ts = str(msg.get("timestamp") or "")[:10]  # YYYY-MM-DD
                     if not ts:
+                        continue
+                    if from_date and ts < from_date:
+                        continue
+                    if to_date and ts > to_date:
                         continue
                     counter[ts] += 1
         buckets = [{"date": k, "count": v} for k, v in sorted(counter.items())]
@@ -637,14 +647,14 @@ def create_app() -> FastAPI:
             html_body = markdown.markdown(content)
         except Exception:
             pass
-        return HTMLResponse(f"<html><body>{html_body}</body></html>")
+        import re
 
-    @app.get("/api/progress/{job_id}")
-    def progress(job_id: str) -> dict:
-        job = _JOBS.get(job_id)
-        if job:
-            return {"job_id": job_id, "pct": job.get("pct", 0), "stored": job.get("stored", 0), "total": job.get("total", 0), "elapsed": job.get("elapsed", 0), "eta": job.get("eta", 0), "status": job.get("status", "running")}
-        return {"job_id": job_id, "pct": 0, "stored": 0, "total": 0, "elapsed": 0, "eta": 0, "status": "unknown"}
+        html_body = re.sub(
+            r"\[([a-zA-Z0-9_\.\-]+:\d+)\]",
+            r'<a href="#" class="citation wiki-evidence-link" data-tag="\1">[\1]</a>',
+            html_body,
+        )
+        return HTMLResponse(f"<html><body>{html_body}</body></html>")
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
