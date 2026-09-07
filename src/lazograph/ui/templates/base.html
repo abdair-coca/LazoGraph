@@ -7,139 +7,300 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header class="top-nav">
-  <div class="brand" onclick="document.querySelector('[data-tab=inicio]').click()"><div class="brand-mark">◈</div> LazoGraph</div>
-  <nav class="nav-links">
-    <div class="nav-group">
-      <button data-tab="inicio" class="active">Inicio</button>
-      <button data-tab="ask">Preguntar</button>
-      <button data-tab="explore">Explorar</button>
-    </div>
-    <span class="nav-divider"></span>
-    <div class="nav-group">
-      <button data-tab="history">Historia</button>
-      <button data-tab="graph">Grafo</button>
-    </div>
-    <span class="nav-divider"></span>
-    <div class="nav-group">
-      <button data-tab="import">Importar</button>
-      <button data-tab="settings">Ajustes</button>
-    </div>
-  </nav>
-  <div class="dataset-select"><select id="dataset-select"><option>Cargando memoria…</option></select></div>
-</header>
-
-<section class="hero">
-  <div class="hero-copy">
-    <div class="hero-kicker">Memoria personal · Local-first · Tus recuerdos</div>
-    <h1>Tu historia personal,<br/>con evidencia real.</h1>
-    <p>Conversaciones convertidas en una memoria explorable. Descubrí patrones, recordá momentos y hacé preguntas con citas verificables, 100% privado en tu dispositivo.</p>
-    <div class="hero-ctas">
-      <button class="btn-primary" onclick="document.querySelector('[data-tab=ask]').click()">Hacer una pregunta</button>
-      <button class="btn-secondary" onclick="document.querySelector('[data-tab=explore]').click()">Explorar memoria</button>
-    </div>
-    <p style="margin-top:14px; font-size:12px; color:var(--color-muted);">🔒 Privacidad absoluta · Procesado localmente sin conexión externa</p>
-  </div>
-  <div class="hero-illustration">
-    <div class="clay-card">
-      <div style="display:flex; align-items:center; gap:12px;">
-        <div class="clay-blob" style="background:var(--color-person); color:#fff;">◆</div>
-        <div><strong style="font-size:14px;">Habla con tu historia</strong><br/><span style="color:var(--color-muted); font-size:12px;">Perspectivas basadas en conversaciones reales</span></div>
-        <span class="badge badge-place" style="margin-left:auto;">local</span>
-      </div>
-      <div style="margin-top:12px; padding:12px; background:var(--color-surface-soft); border-radius:12px; font-size:13px; color:var(--color-body);">
-        “¿Qué cosas le gustan a <strong>Alex</strong>?” → <em style="color:var(--color-ink);">fotografía urbana, cafeterías, correr</em> <span style="color:var(--color-muted);">[chat.jsonl:2]</span>
-      </div>
-    </div>
-    <div class="clay-card">
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <span class="badge badge-person" id="hero-badge-messages">3.614 recuerdos</span>
-        <span class="badge badge-place" id="hero-badge-people">18 personas</span>
-        <span class="badge badge-event" id="hero-badge-connections">127 conexiones</span>
-      </div>
-      <div style="margin-top:12px; height:24px; background: linear-gradient(90deg, var(--color-memory) 0 32%, var(--color-place) 32% 62%, var(--color-event) 62% 84%, var(--color-person) 84% 100%); border-radius:8px; opacity:.85;"></div>
-    </div>
-  </div>
-</section>
-
-<main>
-  <!-- TAB: INICIO (Principal) -->
-  <section id="tab-inicio" class="tab active">
-    <div style="margin-bottom:var(--spacing-lg);">
-      <div id="inicio-greeting" style="font-size:22px; font-weight:600; color:var(--color-ink); margin-bottom:4px;">Buenas tardes</div>
-      <div style="color:var(--color-muted); font-size:14px;">Hay conexiones y momentos en tu historia listos para explorar.</div>
+<div class="app-shell">
+  <!-- Sidebar izquierdo -->
+  <aside class="app-sidebar">
+    <div class="sidebar-brand" onclick="activateTab('inicio')">
+      <div class="sidebar-brand-mark">✦</div>
+      <span>LazoGraph</span>
     </div>
 
-    <!-- Pregunta principal -->
-    <div class="card card-cream" style="margin-bottom:var(--spacing-lg);">
-      <h3 style="margin:0 0 8px; font-size:17px; font-weight:600;">¿Qué quieres entender hoy?</h3>
-      <div style="display:flex; gap:8px; margin-top:10px;">
-        <input type="text" id="inicio-quick-q" class="input" placeholder="Pregúntame algo sobre tu vida..." style="flex:1;">
-        <button class="btn-primary" onclick="const q=document.getElementById('inicio-quick-q').value; if(q){ document.getElementById('ask-question').value=q; document.querySelector('[data-tab=ask]').click(); document.getElementById('ask-form').requestSubmit(); }">Preguntar</button>
+    <nav class="sidebar-nav">
+      <button class="sidebar-btn active" data-tab="inicio"><span class="sidebar-icon">🏠</span> Inicio</button>
+      <button class="sidebar-btn" data-tab="ask"><span class="sidebar-icon">✦</span> Preguntar</button>
+      <button class="sidebar-btn" data-tab="explore"><span class="sidebar-icon">🧭</span> Explorar</button>
+
+      <div class="sidebar-section-title">TU MUNDO</div>
+      <button class="sidebar-btn" data-tab="people" onclick="activateTab('explore', 'people')"><span class="sidebar-icon">👤</span> Personas</button>
+      <button class="sidebar-btn" data-tab="history"><span class="sidebar-icon">🕒</span> Timeline</button>
+      <button class="sidebar-btn" data-tab="graph"><span class="sidebar-icon">☊</span> Grafo</button>
+      <button class="sidebar-btn" data-tab="wiki" onclick="activateTab('explore', 'wiki')"><span class="sidebar-icon">🏷️</span> Temas</button>
+      <button class="sidebar-btn" data-tab="search" onclick="activateTab('explore', 'search')"><span class="sidebar-icon">📍</span> Lugares</button>
+
+      <div class="sidebar-section-title">BIBLIOTECA</div>
+      <button class="sidebar-btn" data-tab="plans" onclick="activateTab('explore', 'plans')"><span class="sidebar-icon">🔖</span> Recuerdos</button>
+      <button class="sidebar-btn" data-tab="search" onclick="activateTab('explore', 'search')"><span class="sidebar-icon">🔍</span> Buscar</button>
+
+      <div class="sidebar-section-title">DATOS</div>
+      <button class="sidebar-btn" data-tab="import"><span class="sidebar-icon">⬆</span> Importar datos</button>
+      <button class="sidebar-btn" data-tab="settings" onclick="activateTab('settings')"><span class="sidebar-icon">⚙️</span> Ajustes</button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="sidebar-status-card">
+        <div class="status-title">🔒 Local · Sin red</div>
+        <div class="status-subtitle">Tus recuerdos, siempre tuyos.</div>
+        <svg class="sidebar-wave" viewBox="0 0 100 20" fill="none">
+          <path d="M0 10 Q 25 18, 50 10 T 100 10" stroke="#FF5C7A" stroke-width="1.5" fill="none" opacity="0.6"/>
+          <path d="M0 10 Q 25 2, 50 10 T 100 10" stroke="#9D8FD1" stroke-width="1.5" fill="none" opacity="0.6"/>
+        </svg>
       </div>
-      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--color-muted); align-items:center;">
-        <span>Sugerencias:</span>
-        <button type="button" class="btn-chip" onclick="document.getElementById('ask-question').value=this.textContent; document.querySelector('[data-tab=ask]').click();">¿Qué patrones se repiten en mis relaciones?</button>
-        <button type="button" class="btn-chip" onclick="document.getElementById('ask-question').value=this.textContent; document.querySelector('[data-tab=ask]').click();">¿Qué objetivos menciono con frecuencia?</button>
-        <button type="button" class="btn-chip" onclick="document.getElementById('ask-question').value=this.textContent; document.querySelector('[data-tab=ask]').click();">¿Qué planes pendientes tenemos?</button>
+
+      <div class="sidebar-profile-pill" data-tab="settings" onclick="activateTab('settings')" title="Configurar ajustes">
+        <div class="sidebar-avatar" id="sidebar-user-avatar">AC</div>
+        <div class="sidebar-profile-name" id="sidebar-user-name">Abdair Coca</div>
+        <span style="font-size:10px; color:var(--color-muted);">▼</span>
       </div>
     </div>
+  </aside>
 
-    <!-- Tu Mundo — Preview interactivo -->
-    <div class="card" style="margin-bottom:var(--spacing-lg); overflow:hidden;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <div>
-          <h3 style="margin:0; font-size:18px; font-weight:600;">Tu mundo</h3>
-          <p style="margin:2px 0 0; color:var(--color-muted); font-size:13px;">Exploración visual de personas, momentos y recuerdos conectados.</p>
+  <!-- Contenido principal y barra superior -->
+  <div class="main-content-wrapper">
+    <header class="top-bar">
+      <div class="top-search-box">
+        <span style="color:var(--color-muted); font-size:13px;">🔍</span>
+        <input type="text" id="global-search-input" placeholder="Buscar en tus conversaciones...">
+        <kbd>⌘ K</kbd>
+      </div>
+
+      <div class="top-actions">
+        <button type="button" class="top-btn-icon" onclick="activateTab('ask')" title="Preguntar">✦</button>
+        <button type="button" class="top-btn-icon" onclick="activateTab('settings')" title="Ajustes">🔔</button>
+        <div class="memory-sparkline-badge">
+          <svg width="40" height="16" viewBox="0 0 40 16" fill="none">
+            <path d="M2 12 Q 10 2, 20 8 T 38 4" stroke="#F4C65D" stroke-width="2" stroke-linecap="round" fill="none"/>
+          </svg>
+          <span>Tu memoria sigue tomando forma...</span>
         </div>
-        <button class="btn-secondary" onclick="document.querySelector('[data-tab=graph]').click()">Ver en pantalla completa</button>
+        <div class="dataset-select" style="margin:0;"><select id="dataset-select"><option>Cargando memoria…</option></select></div>
       </div>
-      <div id="inicio-world-container" style="width:100%; height:320px; background:var(--color-surface-card); border-radius:var(--radius-lg); border:1px solid var(--color-hairline); display:grid; place-items:center; color:var(--color-muted); position:relative;">
-        <div style="text-align:center;">
-          <div class="clay-blob" style="margin:0 auto 12px; background:var(--color-surface); border:1px solid var(--color-hairline);">◈</div>
-          <p style="margin:0; font-size:13px;">Cargando conexiones de tu memoria...</p>
-        </div>
-      </div>
-      <div id="inicio-world-detail" style="display:none; margin-top:var(--spacing-sm); padding:12px 16px; background:var(--color-surface); border:1px solid var(--color-hairline); border-radius:var(--radius-md); box-shadow:var(--shadow-card);"></div>
-    </div>
+    </header>
 
-    <!-- Para ti — Recuerdos y reflexiones destacadas -->
-    <div style="margin-bottom:var(--spacing-lg);">
-      <h3 style="font-size:18px; font-weight:600; margin:0 0 12px;">Para ti</h3>
-      <div class="grid grid-3">
-        <div class="card card-coral">
-          <span class="badge badge-person">Personas</span>
-          <h4 style="margin:10px 0 4px; font-size:15px;" id="highlight-person-title">Conexión activa</h4>
-          <p style="margin:0; font-size:13px; color:var(--color-body);" id="highlight-person-desc">Personas clave identificadas en tus conversaciones.</p>
-        </div>
-        <div class="card card-lavender">
-          <span class="badge badge-memory">Reflexión</span>
-          <h4 style="margin:10px 0 4px; font-size:15px;" id="highlight-pattern-title">Patrones observados</h4>
-          <p style="margin:0; font-size:13px; color:var(--color-body);" id="highlight-pattern-desc">Temas y decisiones recurrentes a lo largo del tiempo.</p>
-        </div>
-        <div class="card card-gold">
-          <span class="badge badge-event">Compromisos</span>
-          <h4 style="margin:10px 0 4px; font-size:15px;" id="highlight-plans-title">Planes y momentos</h4>
-          <p style="margin:0; font-size:13px; color:var(--color-body);" id="highlight-plans-desc">Iniciativas y planes registrados en tus charlas.</p>
-        </div>
-      </div>
-    </div>
+    <div class="app-main-view">
+      <main>
+        <!-- TAB: INICIO (Principal) -->
+        <section id="tab-inicio" class="tab active">
+          <div style="margin-bottom:20px;">
+            <div id="inicio-greeting" style="font-size:24px; font-weight:700; color:var(--color-ink); letter-spacing:-0.4px;">
+              ☀️ Buenas tardes, <span id="inicio-user-name" style="color:#6C5BA7;">Abdair</span>
+            </div>
+            <div style="color:var(--color-muted); font-size:14px; margin-top:2px;">Tu historia tiene nuevas conexiones por explorar.</div>
+          </div>
 
-    <!-- Resumen de actividad sutil + KPIs compatibles -->
-    <div class="card card-cream">
-      <div class="memory-counter">
-        <span class="memory-counter-dot"></span>
-        <span>Actividad de memoria:</span>
-        <strong id="kpi-messages">—</strong> recuerdos procesados
-        <span>·</span>
-        <strong id="kpi-personas">—</strong> personas conectadas
-        <span>·</span>
-        <strong id="kpi-graph">—</strong> conexiones observadas
-      </div>
-      <p id="diagnose" style="display:none;"></p>
-      <pre id="diagnose-raw" style="margin-top:var(--spacing-sm); background:var(--color-surface-soft); padding:var(--spacing-md); border-radius:var(--radius-md); max-height:160px; overflow:auto; font-size:11.5px; display:none;"></pre>
-    </div>
-  </section>
+          <!-- Prompter Card -->
+          <div class="prompter-card">
+            <div class="prompter-input-row">
+              <span style="color:#8472C8; font-size:16px;">✦</span>
+              <input type="text" id="inicio-quick-q" placeholder="¿Qué quieres entender mejor sobre tu vida?">
+              <button type="button" class="prompter-submit-btn" id="inicio-prompter-submit" title="Consultar">➔</button>
+            </div>
+            <div class="prompter-suggestions">
+              <button type="button" class="prompter-chip" data-q="¿Qué patrones hay en mis relaciones?">¿Qué <strong>patrones</strong> hay en mis relaciones?</button>
+              <button type="button" class="prompter-chip" data-q="¿Qué debería hacer con mi futuro?">¿Qué <strong>debería</strong> hacer con mi futuro?</button>
+              <button type="button" class="prompter-chip" data-q="¿Qué me hace feliz realmente?">¿Qué me hace feliz realmente?</button>
+              <button type="button" class="prompter-chip" onclick="activateTab('ask')">Ver más ∨</button>
+            </div>
+          </div>
+
+          <!-- Grid Dashboard de 2 Columnas -->
+          <div class="inicio-dashboard-grid">
+            <!-- Columna Izquierda: Grafo y Métricas -->
+            <div>
+              <!-- Tarjeta: Tu grafo personal -->
+              <div class="graph-hero-card">
+                <div class="graph-hero-header">
+                  <div class="graph-hero-title">
+                    <div class="graph-hero-avatar">👤</div>
+                    <div>
+                      <strong style="font-size:15px;">Tu grafo personal</strong>
+                      <div style="font-size:12px; color:var(--color-muted);">Personas, lugares, temas y momentos conectados.</div>
+                    </div>
+                  </div>
+                  <div class="graph-view-toggles">
+                    <div class="graph-view-pill">
+                      <button type="button" class="active" id="graph-view-toggle-graph">☊ Grafo</button>
+                      <button type="button" id="graph-view-toggle-timeline" onclick="activateTab('history')">🕒 Timeline</button>
+                    </div>
+                    <button type="button" class="top-btn-icon" style="width:28px; height:28px; font-size:12px;" onclick="activateTab('graph')" title="Pantalla completa">⤢</button>
+                  </div>
+                </div>
+
+                <div id="inicio-world-container" class="graph-canvas-container">
+                  <div style="text-align:center;">
+                    <div class="clay-blob" style="margin:0 auto 12px; background:var(--color-surface); border:1px solid var(--color-hairline);">◈</div>
+                    <p style="margin:0; font-size:13px;">Cargando tu grafo personal...</p>
+                  </div>
+                </div>
+                <div id="inicio-world-detail" style="display:none; margin-top:var(--spacing-sm); padding:12px 16px; background:var(--color-surface); border:1px solid var(--color-hairline); border-radius:var(--radius-md); box-shadow:var(--shadow-card);"></div>
+
+                <div class="graph-floating-bottom-left">
+                  <span style="color:#8472C8;">✦</span>
+                  <span id="graph-connections-badge"><strong>51 conexiones</strong> · Explora, haz zoom y descubre más.</span>
+                </div>
+                <div class="graph-floating-bottom-right">
+                  <button type="button" class="graph-zoom-btn" id="graph-zoom-in" title="Acercar">+</button>
+                  <button type="button" class="graph-zoom-btn" id="graph-zoom-out" title="Alejar">−</button>
+                  <button type="button" class="graph-zoom-btn" id="graph-zoom-reset" title="Recentrar">⊙</button>
+                </div>
+              </div>
+
+              <!-- 4 Tarjetas Métricas -->
+              <div class="metric-cards-row">
+                <div class="metric-card metric-card-lavender" onclick="activateTab('explore', 'search')" style="cursor:pointer;">
+                  <div class="metric-card-header">
+                    <div class="metric-icon-badge" style="background:#ECE7F8; color:#6C5BA7;">💬</div>
+                    <span>Mensajes</span>
+                  </div>
+                  <div class="metric-card-num" id="kpi-messages">4.932</div>
+                  <div class="metric-card-sub" id="metric-messages-sub">✓ 4.932 recuerdos · 4 perfiles, vectores listos</div>
+                </div>
+                <div class="metric-card metric-card-mint" onclick="activateTab('explore', 'people')" style="cursor:pointer;">
+                  <div class="metric-card-header">
+                    <div class="metric-icon-badge" style="background:#E2F3ED; color:#2A8556;">👥</div>
+                    <span>Personas</span>
+                  </div>
+                  <div class="metric-card-num" id="kpi-personas">4</div>
+                  <div class="metric-card-sub" id="metric-personas-sub">Identidad canónica + aliases</div>
+                </div>
+                <div class="metric-card metric-card-indigo" onclick="activateTab('graph')" style="cursor:pointer;">
+                  <div class="metric-card-header">
+                    <div class="metric-icon-badge" style="background:#EBE8F8; color:#5844A8;">☊</div>
+                    <span>Conexiones</span>
+                  </div>
+                  <div class="metric-card-num" id="kpi-graph">51</div>
+                  <div class="metric-card-sub" id="metric-connections-sub">Relaciones observadas en el grafo</div>
+                </div>
+                <div class="metric-card metric-card-gold" onclick="activateTab('explore', 'plans')" style="cursor:pointer;">
+                  <div class="metric-card-header">
+                    <div class="metric-icon-badge" style="background:#FEF4DE; color:#C28A1A;">🔖</div>
+                    <span>Recuerdos</span>
+                  </div>
+                  <div class="metric-card-num" id="kpi-memories">127</div>
+                  <div class="metric-card-sub" id="metric-memories-sub">Momentos destacados registrados</div>
+                </div>
+              </div>
+
+              <!-- KPIs ocultos para compatibilidad JS -->
+              <p id="diagnose" style="display:none;"></p>
+              <pre id="diagnose-raw" style="display:none;"></pre>
+            </div>
+
+            <!-- Columna Derecha: Pregunta, Insight y Recuerdos -->
+            <div class="right-panel-stack">
+              <!-- Card 1: Pregunta sobre tu vida -->
+              <div class="right-card">
+                <div class="right-card-header">
+                  <div>
+                    <div class="right-card-title">
+                      <span style="color:#8472C8;">✦</span> Pregunta sobre tu vida
+                    </div>
+                    <div class="right-card-subtitle">Tu asistente personal, con evidencia real.</div>
+                  </div>
+                  <span class="badge badge-memory" style="font-size:10px; padding:2px 6px;">Beta</span>
+                </div>
+                <div class="ask-life-input">
+                  <input type="text" id="right-panel-ask-input" placeholder="Escribe tu pregunta...">
+                  <button type="button" class="ask-life-submit" id="right-panel-ask-submit">➔</button>
+                </div>
+                <div style="font-size:11.5px; font-weight:600; color:var(--color-muted); margin-bottom:8px;">Ejemplos</div>
+                <div class="clickable-question-item" data-q="¿Qué patrones se repiten en mis relaciones?">
+                  <span>¿Qué patrones se repiten en mis relaciones?</span>
+                  <span style="color:var(--color-muted);">›</span>
+                </div>
+                <div class="clickable-question-item" data-q="¿Qué me aconsejarías sobre mi futuro?">
+                  <span>¿Qué me aconsejarías sobre mi futuro?</span>
+                  <span style="color:var(--color-muted);">›</span>
+                </div>
+                <div class="clickable-question-item" data-q="¿Qué cosas quiero hacer pero nunca hago?">
+                  <span>¿Qué cosas quiero hacer pero nunca hago?</span>
+                  <span style="color:var(--color-muted);">›</span>
+                </div>
+                <div class="clickable-question-item" data-q="¿Cómo estoy con mi salud mental?">
+                  <span>¿Cómo estoy con mi salud mental?</span>
+                  <span style="color:var(--color-muted);">›</span>
+                </div>
+              </div>
+
+              <!-- Card 2: Insight del día -->
+              <div class="right-card">
+                <div class="right-card-header">
+                  <div class="right-card-title">
+                    <span style="color:#FF5C7A;">💡</span> Insight del día
+                  </div>
+                  <span style="font-size:11px; color:var(--color-muted);">Hace 2 horas</span>
+                </div>
+                <div class="insight-card-body">
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                    <div style="font-size:13px; line-height:1.5; color:var(--color-ink);" id="insight-highlight-text">
+                      Has mencionado querer emigrar <strong style="color:#5844A8;">23 veces</strong> en los últimos 18 meses.
+                    </div>
+                    <span style="font-size:24px;">✈️</span>
+                  </div>
+                  <div style="font-size:11.5px; color:var(--color-muted); margin:12px 0 6px;">Lugares más frecuentes:</div>
+                  <div class="country-frequency-item">
+                    <span>🇦🇺 Australia</span>
+                    <strong style="color:var(--color-ink);">12</strong>
+                  </div>
+                  <div class="country-frequency-item">
+                    <span>🇨🇦 Canadá</span>
+                    <strong style="color:var(--color-ink);">7</strong>
+                  </div>
+                  <div class="country-frequency-item">
+                    <span>🇺🇸 Estados Unidos</span>
+                    <strong style="color:var(--color-ink);">4</strong>
+                  </div>
+                  <div style="margin-top:10px; text-align:right;">
+                    <button type="button" class="btn-chip" onclick="activateTab('explore', 'search')" style="font-size:11.5px; border:none; background:transparent; color:#6C5BA7; font-weight:600; cursor:pointer;">Ver detalles ›</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card 3: Recuerdos recientes -->
+              <div class="right-card">
+                <div class="right-card-header">
+                  <div class="right-card-title">
+                    <span style="color:#F4C65D;">🕒</span> Recuerdos recientes
+                  </div>
+                  <button type="button" class="btn-chip" onclick="activateTab('explore', 'plans')" style="font-size:11px; border:none; background:transparent; color:var(--color-muted); cursor:pointer;">Ver todos ›</button>
+                </div>
+                <div class="recent-memories-list" id="recent-memories-container">
+                  <div class="recent-memory-item" data-q="primer proyecto de robot">
+                    <div class="recent-memory-thumb" style="background:#EBF5F0;">🤖</div>
+                    <div style="flex:1;">
+                      <div class="recent-memory-title">Tu primer proyecto de robot</div>
+                      <div class="recent-memory-meta">7 sep 2025 · 12 mensajes</div>
+                    </div>
+                    <span style="color:var(--color-muted);">›</span>
+                  </div>
+                  <div class="recent-memory-item" data-q="Alizon">
+                    <div class="recent-memory-thumb" style="background:#FDECEE;">👩</div>
+                    <div style="flex:1;">
+                      <div class="recent-memory-title">Conversación con Alizon</div>
+                      <div class="recent-memory-meta">14 ago 2025 · 32 mensajes</div>
+                    </div>
+                    <span style="color:var(--color-muted);">›</span>
+                  </div>
+                  <div class="recent-memory-item" data-q="gym">
+                    <div class="recent-memory-thumb" style="background:#FAF3E3;">🏋️</div>
+                    <div style="flex:1;">
+                      <div class="recent-memory-title">Día en el gym</div>
+                      <div class="recent-memory-meta">3 ago 2025 · 15 mensajes</div>
+                    </div>
+                    <span style="color:var(--color-muted);">›</span>
+                  </div>
+                  <div class="recent-memory-item" data-q="viaje a Canadá">
+                    <div class="recent-memory-thumb" style="background:#EBF3F9;">🏔️</div>
+                    <div style="flex:1;">
+                      <div class="recent-memory-title">Planeando el viaje a Canadá</div>
+                      <div class="recent-memory-meta">21 jun 2025 · 48 mensajes</div>
+                    </div>
+                    <span style="color:var(--color-muted);">›</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
   <!-- TAB: PREGUNTAR (Ask Lazo) -->
   <section id="tab-ask" class="tab">
@@ -421,12 +582,14 @@
     </div>
     <button class="btn-primary" onclick="document.querySelector('[data-tab=settings]').click()">Configurar ajustes</button>
   </section>
-</main>
-
-<footer class="footer">
-  <span>© 2026 LazoGraph · Personal Memory Intelligence</span>
-  <span><a href="/api/health">Salud del sistema</a> · Local-first</span>
-</footer>
+      </main>
+      <footer class="footer">
+        <span>© 2026 LazoGraph · Personal Memory Intelligence</span>
+        <span><a href="/api/health">Salud del sistema</a> · Local-first</span>
+      </footer>
+    </div>
+  </div>
+</div>
 
 <script src="https://unpkg.com/cytoscape@3.26.0/dist/cytoscape.min.js"></script>
 <script src="/static/app.js"></script>
