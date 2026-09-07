@@ -91,6 +91,8 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'"
         response.headers["X-Frame-Options"] = "DENY"
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
         return response
 
     @app.middleware("http")
