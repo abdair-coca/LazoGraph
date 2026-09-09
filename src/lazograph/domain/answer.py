@@ -20,6 +20,7 @@ class Evidence:
     authored_by: str = ""
     confidence: float | None = None
     imported_at: str = ""
+    dialogue_context: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

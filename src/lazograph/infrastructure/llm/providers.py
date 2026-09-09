@@ -74,6 +74,7 @@ def _prompt(
             "sender": item.sender,
             "timestamp": item.timestamp,
             "excerpt": item.excerpt,
+            "dialogue_context": item.dialogue_context,
             "source_type": item.source_type,
             "record_kind": item.record_kind,
             "authority": item.authority,
@@ -84,13 +85,16 @@ def _prompt(
         for item in evidence
     ]
     return (
-        "Answer only from EVIDENCE. Never treat CONTEXT metadata as proof. "
-        "Return strict JSON with keys text, citation_ids, confidence, abstained, suggestions, "
-        "missing_information. suggestions and missing_information must be arrays of strings. "
-        "Every factual claim must cite one or more message_id values. "
-        "Every suggestion justified by evidence must include its citation marker. "
-        "Label facts, inferences, suggestions, and missing information separately in text. "
-        "Abstain when evidence is insufficient. "
+        "You are an empathetic, insightful assistant analyzing authentic personal conversations. "
+        "Answer the question directly, conversationally, and thoroughly based ONLY on the provided EVIDENCE. "
+        "Do not merely list the messages; interpret them, synthesize themes, and explain what they reveal about the person or question. "
+        "Never treat CONTEXT metadata as proof. "
+        "Return strict JSON with keys text, citation_ids, confidence, abstained, suggestions, missing_information. "
+        "confidence must be a number between 0.0 and 1.0 (e.g. 0.9). "
+        "citation_ids must be an array of message_id strings that you used as evidence. "
+        "In the 'text' field, for EVERY message_id in citation_ids, you MUST place its exact bracketed marker [message_id] right after the claim or sentence it supports. "
+        "suggestions and missing_information must be arrays of strings. "
+        "Abstain (abstained: true) only when the evidence provides zero relevant information. "
         f"Answer language: {language}.\n"
         f"PARTICIPANT: {participant}\n"
         f"QUESTION: {question}\n"
@@ -107,8 +111,31 @@ def _parse_provider_json(content: str) -> ProviderOutput:
     try:
         payload = json.loads(cleaned)
         text = str(payload["text"]).strip()
+        text = re.sub(
+            r"\[([a-zA-Z0-9_\-\.]+:\d+(?:\s*,\s*[a-zA-Z0-9_\-\.]+:\d+)*)\]",
+            lambda m: " ".join(f"[{item.strip()}]" for item in m.group(1).split(",")),
+            text,
+        )
         citation_ids = tuple(str(item) for item in payload.get("citation_ids", []))
-        confidence = float(payload.get("confidence", 0.0))
+        raw_conf = payload.get("confidence", 0.0)
+        if isinstance(raw_conf, str):
+            clean_conf = raw_conf.strip().lower()
+            if clean_conf in ("high", "alta", "alto"):
+                confidence = 0.9
+            elif clean_conf in ("medium", "media", "medio"):
+                confidence = 0.6
+            elif clean_conf in ("low", "baja", "bajo"):
+                confidence = 0.3
+            else:
+                try:
+                    confidence = float(clean_conf)
+                except ValueError:
+                    confidence = 0.5
+        else:
+            try:
+                confidence = float(raw_conf)
+            except (TypeError, ValueError):
+                confidence = 0.5
         abstained = bool(payload.get("abstained", False))
         raw_suggestions = payload.get("suggestions", [])
         raw_missing_information = payload.get("missing_information", [])
@@ -233,7 +260,7 @@ class LocalExtractiveProvider:
                 confidence=min(item.score for item in evidence),
             )
 
-        selected = tuple(evidence[:3])
+        selected = tuple(evidence)
         has_manual_context = any(
             item.source_type in {"user_context", "user_correction"}
             for item in selected
@@ -250,7 +277,13 @@ class LocalExtractiveProvider:
             )
         lines = [lead]
         for item in selected:
-            lines.append(f'- “{item.excerpt}” [{item.message_id}]')
+            ts = f" ({item.timestamp[:16]})" if item.timestamp and len(item.timestamp) >= 16 else (f" ({item.timestamp})" if item.timestamp else "")
+            lines.append(f'- “{item.excerpt}” [{item.message_id}]{ts}')
+            if item.dialogue_context and "\n" in item.dialogue_context.strip():
+                ctx_header = "  Contexto del diálogo:" if language == "es" else "  Dialogue context:"
+                lines.append(ctx_header)
+                for turn in item.dialogue_context.strip().splitlines():
+                    lines.append(f"    │ {turn}")
         confidence = sum(item.score for item in selected) / len(selected)
         return ProviderOutput(
             text="\n".join(lines),
@@ -404,9 +437,36 @@ class HostedProvider:
         api_key: str | None = None,
         transport: Transport = _post_json,
     ):
-        self.model = model or os.environ.get("LAZOGRAPH_HOSTED_MODEL", "")
-        self.url = url or os.environ.get("LAZOGRAPH_HOSTED_URL", "")
-        self.api_key = api_key or os.environ.get("LAZOGRAPH_HOSTED_API_KEY", "")
+        if url is not None:
+            self.url = url
+        else:
+            self.url = os.environ.get("LAZOGRAPH_HOSTED_URL", "")
+            if not self.url:
+                if os.environ.get("GEMINI_API_KEY"):
+                    self.url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+                elif os.environ.get("OPENAI_API_KEY"):
+                    self.url = "https://api.openai.com/v1/chat/completions"
+
+        if api_key is not None:
+            self.api_key = api_key
+        else:
+            self.api_key = (
+                os.environ.get("LAZOGRAPH_HOSTED_API_KEY")
+                or os.environ.get("GEMINI_API_KEY")
+                or os.environ.get("OPENAI_API_KEY")
+                or ""
+            )
+
+        if model is not None:
+            self.model = model
+        else:
+            self.model = os.environ.get("LAZOGRAPH_HOSTED_MODEL", "")
+            if not self.model:
+                if "generativelanguage.googleapis.com" in self.url:
+                    self.model = "gemini-2.5-flash"
+                elif "api.openai.com" in self.url:
+                    self.model = "gpt-4o-mini"
+
         self.transport = transport
 
     def generate(

@@ -111,16 +111,47 @@ def _lexical_overlap(question_terms: set[str], content_terms: set[str]) -> int:
     return matches
 
 
-def _source_index(dataset_dir: Path, participant: str | None) -> tuple[dict[str, dict], dict[tuple, dict]]:
+def _build_dialogue_context(
+    source_lines: dict[str, list[dict]],
+    source_file: str,
+    line_number: int,
+    window: int = 2,
+) -> str:
+    lines = source_lines.get(source_file, [])
+    if not lines or line_number < 1 or line_number > len(lines):
+        return ""
+    idx = line_number - 1
+    start = max(0, idx - window)
+    end = min(len(lines), idx + window + 1)
+    turns = []
+    for i in range(start, end):
+        msg = lines[i]
+        if not msg:
+            continue
+        sender = str(msg.get("metadata", {}).get("sender") or msg.get("role") or "").strip()
+        content = str(msg.get("content", "")).strip()
+        if not content:
+            continue
+        ts = str(msg.get("timestamp") or "")
+        ts_short = ts[11:16] if len(ts) >= 16 else (ts[:10] if ts else "")
+        prefix = f"[{ts_short}] {sender}: " if (ts_short and sender) else (f"{sender}: " if sender else "")
+        turns.append(f"{prefix}{content}")
+    return "\n".join(turns)
+
+
+def _source_index(dataset_dir: Path, participant: str | None) -> tuple[dict[str, dict], dict[tuple, dict], dict[str, list[dict]]]:
     by_vector_id: dict[str, dict] = {}
     by_fallback: dict[tuple, dict] = {}
+    source_lines: dict[str, list[dict]] = {}
     for source_path in sorted(dataset_dir.joinpath("sources").glob("*.jsonl")):
+        file_lines = []
         with source_path.open(encoding="utf-8") as source:
             for line_number, line in enumerate(source, 1):
                 try:
                     message = json.loads(line)
                 except (json.JSONDecodeError, TypeError):
-                    continue
+                    message = {}
+                file_lines.append(message)
                 sender = str(message.get("metadata", {}).get("sender", "")).strip()
                 if participant and sender.casefold() != participant.casefold():
                     continue
@@ -128,6 +159,7 @@ def _source_index(dataset_dir: Path, participant: str | None) -> tuple[dict[str,
                     "message": message,
                     "message_id": f"{source_path.name}:{line_number}",
                     "source_file": source_path.name,
+                    "line_number": line_number,
                 }
                 try:
                     by_vector_id[ingest._vector_id(dataset_dir.name, message)] = record
@@ -139,7 +171,8 @@ def _source_index(dataset_dir: Path, participant: str | None) -> tuple[dict[str,
                     message.get("timestamp"),
                 )
                 by_fallback[fallback] = record
-    return by_vector_id, by_fallback
+        source_lines[source_path.name] = file_lines
+    return by_vector_id, by_fallback, source_lines
 
 
 def retrieve_evidence(
@@ -147,19 +180,19 @@ def retrieve_evidence(
     question: str,
     participant: str | None,
     *,
-    limit: int = 5,
-    evidence_budget: int = 2500,
+    limit: int = 10,
+    evidence_budget: int = 5000,
     memory_search: MemorySearch = query_memory.search_memory,
 ) -> tuple[list[Evidence], dict[str, Any]]:
     """Retrieve with sender filter, then verify every hit against persisted source lines."""
-    candidate_limit = min(max(limit * 6, 20), 100)
+    candidate_limit = min(max(limit * 8, 40), 200)
     raw_results = memory_search(
         dataset_dir,
         question,
         participant=participant,
         limit=candidate_limit,
     )
-    by_vector_id, by_fallback = _source_index(dataset_dir, participant)
+    by_vector_id, by_fallback, source_lines = _source_index(dataset_dir, participant)
     question_terms = _topic_terms(question, participant or "")
     question_words = {word.casefold() for word in WORD_PATTERN.findall(question)}
     preference_intent = bool(question_words & PREFERENCE_WORDS)
@@ -199,6 +232,11 @@ def retrieve_evidence(
         excerpt = re.sub(r"\s+", " ", content)[:min(500, evidence_budget)].strip()
         if not excerpt:
             continue
+        dialogue_context = _build_dialogue_context(
+            source_lines,
+            record["source_file"],
+            record.get("line_number", 0),
+        )
         ranked.append((
             score,
             lexical_overlap,
@@ -220,6 +258,7 @@ def retrieve_evidence(
                     else None
                 ),
                 imported_at=str(message.get("metadata", {}).get("imported_at", "")),
+                dialogue_context=dialogue_context,
             ),
         ))
 
@@ -363,6 +402,7 @@ def _validate_output(output, evidence: Sequence[Evidence]) -> tuple[Evidence, ..
     missing_markers = [
         citation for citation in output.citation_ids
         if f"[{citation}]" not in output.text
+        and not re.search(r"\[[^\]]*\b" + re.escape(citation) + r"\b[^\]]*\]", output.text)
     ]
     if missing_markers:
         raise GroundingError(
@@ -377,8 +417,8 @@ def answer_about_person(
     about: str,
     provider: LLMProvider,
     *,
-    limit: int = 5,
-    evidence_budget: int = 2500,
+    limit: int = 10,
+    evidence_budget: int = 5000,
     memory_search: MemorySearch = query_memory.search_memory,
 ) -> Answer:
     profile = resolve_participant(dataset_dir, about)
@@ -469,8 +509,8 @@ def answer_about_dataset(
     question: str,
     provider: LLMProvider,
     *,
-    limit: int = 5,
-    evidence_budget: int = 2500,
+    limit: int = 10,
+    evidence_budget: int = 5000,
     memory_search: MemorySearch = query_memory.search_memory,
 ) -> Answer:
     """Answer questions that do not target one participant or one feature slice."""

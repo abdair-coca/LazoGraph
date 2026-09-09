@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 
@@ -110,21 +111,21 @@ def build_parser() -> argparse.ArgumentParser:
     ask_parser.add_argument("--slug", help="Dataset identifier; optional when only one exists")
     ask_parser.add_argument(
         "--provider",
-        choices=("local", "ollama", "hosted"),
-        default="local",
-        help="Inference provider (default: local extractive)",
+        choices=("auto", "local", "ollama", "hosted"),
+        default="auto",
+        help="Inference provider: auto (uses LLM if configured), local, ollama, or hosted",
     )
     ask_parser.add_argument("--model", help="Model override for Ollama or hosted provider")
     ask_parser.add_argument(
         "--limit",
         type=int,
-        default=5,
+        default=10,
         help="Maximum retrieved items; mandatory relationship-path evidence is retained",
     )
     ask_parser.add_argument(
         "--evidence-budget",
         type=int,
-        default=2500,
+        default=5000,
         help="Maximum evidence characters sent to provider",
     )
     ask_parser.add_argument("--json", action="store_true", help="Output structured Answer JSON")
@@ -330,6 +331,17 @@ def _answer_provider(args: argparse.Namespace):
         return OllamaProvider(model=args.model)
     if args.provider == "hosted":
         return HostedProvider(model=args.model)
+    if args.provider == "auto":
+        if (
+            os.environ.get("LAZOGRAPH_HOSTED_API_KEY")
+            or os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+        ):
+            try:
+                return HostedProvider(model=args.model)
+            except Exception:
+                return LocalExtractiveProvider()
+        return LocalExtractiveProvider()
     return LocalExtractiveProvider()
 
 
