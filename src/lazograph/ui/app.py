@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import uuid
 from pathlib import Path
@@ -230,6 +231,7 @@ def create_app() -> FastAPI:
             "adapter": adapter,
             "source_name": file.filename,
         }
+        _JOBS[token] = {"pct": 0, "stored": 0, "total": 0, "elapsed": 0, "eta": 0, "status": "pending"}
         return {
             "token": token,
             "source": str(preview.source),
@@ -266,7 +268,9 @@ def create_app() -> FastAPI:
         root = knowledge_root()
 
         job_id = uuid.uuid4().hex
-        _JOBS[job_id] = {"pct": 5, "stored": 0, "total": 0, "elapsed": 0, "eta": 0, "status": "running"}
+        job_data = {"pct": 5, "stored": 0, "total": 0, "elapsed": 0, "eta": 0, "status": "running"}
+        _JOBS[job_id] = job_data
+        _JOBS[token] = job_data
 
         def _progress_cb(stored: int, total: int, elapsed: float, eta: float) -> None:
             pct = int((stored / total) * 90) if total else 10
@@ -375,9 +379,9 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail="question required")
         slug = payload.get("slug")
         about = payload.get("about")
-        provider_name = payload.get("provider", "local")
-        limit = int(payload.get("limit", 5))
-        evidence_budget = int(payload.get("evidence_budget", 2500))
+        provider_name = payload.get("provider", "auto")
+        limit = int(payload.get("limit", 10))
+        evidence_budget = int(payload.get("evidence_budget", 5000))
         if limit < 1:
             raise HTTPException(status_code=400, detail="limit must be >=1")
         if evidence_budget < 100:
@@ -397,8 +401,20 @@ def create_app() -> FastAPI:
                 provider = OllamaProvider(model=payload.get("model"))
             elif provider_name == "hosted":
                 provider = HostedProvider(model=payload.get("model"))
-            else:
+            elif provider_name == "local":
                 provider = LocalExtractiveProvider()
+            else:  # auto
+                if (
+                    os.environ.get("LAZOGRAPH_HOSTED_API_KEY")
+                    or os.environ.get("GEMINI_API_KEY")
+                    or os.environ.get("OPENAI_API_KEY")
+                ):
+                    try:
+                        provider = HostedProvider(model=payload.get("model"))
+                    except Exception:
+                        provider = LocalExtractiveProvider()
+                else:
+                    provider = LocalExtractiveProvider()
 
             # mirrors cli._run_ask routing
             if about:
@@ -610,18 +626,6 @@ def create_app() -> FastAPI:
 
             profiles = _load_participant_profiles(dataset_dir)
             entities, relationships, _ = _load_kg(dataset_dir, profiles=profiles)
-            # nodes from entities
-            for ent in entities:
-                # entities may be dict or tuple; handle both
-                if isinstance(ent, dict):
-                    eid = ent.get("id") or ent.get("name") or str(ent)
-                    label = ent.get("name") or eid
-                    ntype = ent.get("type") or "entity"
-                else:
-                    eid = str(ent)
-                    label = eid
-                    ntype = "entity"
-                nodes.append({"id": str(eid), "label": str(label), "type": str(ntype)})
             for rel in relationships:
                 if isinstance(rel, dict):
                     rtype = rel.get("predicate") or rel.get("type") or "related"
@@ -637,7 +641,48 @@ def create_app() -> FastAPI:
                     conf = 1.0
                 else:
                     continue
-                edges.append({"from": str(frm), "to": str(to), "type": str(rtype), "confidence": float(conf) if conf else 1.0})
+                if frm and to:
+                    edges.append({"from": str(frm), "to": str(to), "type": str(rtype), "confidence": float(conf) if conf else 1.0})
+
+            connected_names = {e["from"] for e in edges} | {e["to"] for e in edges}
+            participant_names = {p["name"] for p in (profiles or []) if isinstance(p, dict) and p.get("name")}
+
+            seen_node_ids = set()
+            for ent in entities:
+                if isinstance(ent, dict):
+                    eid = ent.get("id") or ent.get("name") or str(ent)
+                    label = ent.get("name") or eid
+                    ntype = ent.get("type") or "entity"
+                else:
+                    eid = str(ent)
+                    label = eid
+                    ntype = "entity"
+
+                eid_str = str(eid)
+                label_str = str(label)
+                # Exclude internal plan projection nodes
+                if str(ntype) == "plan" or eid_str.startswith("plan:") or label_str.startswith("plan:"):
+                    continue
+
+                if (
+                    eid_str in connected_names
+                    or label_str in connected_names
+                    or eid_str in participant_names
+                    or label_str in participant_names
+                ):
+                    if eid_str not in seen_node_ids:
+                        seen_node_ids.add(eid_str)
+                        is_part = eid_str in participant_names or label_str in participant_names
+                        nodes.append({"id": eid_str, "label": label_str, "type": "participant" if is_part else str(ntype)})
+
+            for p in participant_names:
+                if p and p not in seen_node_ids:
+                    seen_node_ids.add(p)
+                    nodes.append({"id": p, "label": p, "type": "participant"})
+            for c in connected_names:
+                if c and c not in seen_node_ids:
+                    seen_node_ids.add(c)
+                    nodes.append({"id": c, "label": c, "type": "entity"})
         except Exception:
             # fallback: try participants as nodes
             try:

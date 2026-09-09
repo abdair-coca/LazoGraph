@@ -307,10 +307,16 @@
     <div class="card">
       <h2>Habla con tu historia</h2>
       <p>Preguntas sobre tu vida con respuestas fundamentadas en tus conversaciones reales y citas verificables.</p>
-      <form id="ask-form" style="display:flex; gap:var(--spacing-sm); flex-wrap:wrap;">
+      <form id="ask-form" style="display:flex; gap:var(--spacing-sm); flex-wrap:wrap; align-items:center;">
         <input type="text" id="ask-question" class="input" placeholder="¿Qué cosas le gustan a Alex?" required style="flex:1; min-width:220px;">
-        <input type="text" id="ask-about" class="input" placeholder="Sobre persona específica" list="ask-participants-datalist" style="width:220px;">
+        <input type="text" id="ask-about" class="input" placeholder="Sobre persona específica" list="ask-participants-datalist" style="width:200px;">
         <datalist id="ask-participants-datalist"></datalist>
+        <select id="ask-provider" class="input" style="width:165px; font-size:12.5px;" title="Proveedor de inferencia">
+          <option value="auto">✦ LLM Inteligente</option>
+          <option value="hosted">✦ LLM Generativo</option>
+          <option value="local">Extractivo (Sin LLM)</option>
+          <option value="ollama">Ollama Local</option>
+        </select>
         <button type="submit" class="btn-primary">Consultar</button>
       </form>
 

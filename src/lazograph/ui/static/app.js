@@ -68,6 +68,12 @@ function showEvidenceDrawer(c){
         </div>
         <div style="font-size:15px; line-height:1.6; color:var(--color-ink); font-style:italic;">"${esc(c.excerpt||'')}"</div>
       </div>
+      ${c.dialogue_context && c.dialogue_context.includes('\n') ? `
+      <div style="background:var(--color-surface); padding:12px; border-radius:var(--radius-md); margin-bottom:16px; border:1px solid var(--color-hairline);">
+        <strong style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--color-muted); margin-bottom:6px;">Contexto del diálogo (turnos cercanos)</strong>
+        <div style="font-size:12px; line-height:1.5; color:var(--color-ink); white-space:pre-wrap; font-family:monospace;">${esc(c.dialogue_context)}</div>
+      </div>
+      ` : ''}
       <div style="font-size:12.5px; color:var(--color-muted); line-height:1.6;">
         <div><strong>Archivo origen:</strong> <code>${esc(c.source_file||'sources/chat.jsonl')}</code></div>
         <div style="margin-top:4px;"><strong>Relevancia en memoria:</strong> ${(c.score||0).toFixed(3)}</div>
@@ -123,15 +129,28 @@ function renderAskAnswer(j){
       </div>
     </div>`;
   } else {
-    const badge=`<span class="confidence-badge ${confidenceClass(conf)}">Certeza: ${(conf*100|0)}%</span>`;
+    const provName = j.retrieval_summary && j.retrieval_summary.provider;
+    const provBadge = provName === 'hosted'
+      ? `<span class="badge badge-memory" style="font-size:11px; padding:2px 8px;">✦ LLM Generativo</span>`
+      : (provName === 'ollama'
+        ? `<span class="badge badge-memory" style="font-size:11px; padding:2px 8px;">✦ Ollama</span>`
+        : `<span class="badge" style="font-size:11px; padding:2px 8px; background:var(--color-surface-soft); border:1px solid var(--color-hairline);">Modo extractivo</span>`);
+    const badge=`<div style="display:flex; gap:6px; align-items:center;">${provBadge}<span class="confidence-badge ${confidenceClass(conf)}">Certeza: ${(conf*100|0)}%</span></div>`;
+
+    // Format text with interactive inline citation chips
+    let formattedText = esc(j.text || '');
+    formattedText = formattedText.replace(/\[([a-zA-Z0-9_\-\.]+:\d+)\]/g, (match, mid) => {
+      const lineNo = mid.split(':').pop();
+      return `<button type="button" class="btn-chip btn-inline-citation" data-mid="${mid}" style="padding:1px 6px; font-size:11px; font-family:monospace; margin:0 2px; vertical-align:baseline;" title="Inspeccionar cita ${mid}">🔍 [${lineNo}]</button>`;
+    });
 
     // 1. Conclusión directa
     html+=`<div class="card card-cream" style="padding:var(--spacing-md); margin-bottom:12px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-        <h4 style="margin:0; font-size:11.5px; text-transform:uppercase; letter-spacing:.8px; color:var(--color-muted);">Conclusión directa</h4>
+        <h4 style="margin:0; font-size:11.5px; text-transform:uppercase; letter-spacing:.8px; color:var(--color-muted);">Respuesta fundamentada</h4>
         ${badge}
       </div>
-      <p style="margin:0; font-size:15.5px; line-height:1.6; color:var(--color-ink); font-weight:500;">${esc(j.text||'')}</p>
+      <div style="margin:0; font-size:15px; line-height:1.7; color:var(--color-ink); font-weight:400; white-space:pre-wrap;">${formattedText}</div>
     </div>`;
 
     // 2. Lo que encontré (Facts)
@@ -155,6 +174,7 @@ function renderAskAnswer(j){
           <div style="flex:1;">
             <span class="citation" data-sender="${esc(c.sender||'')}" data-mid="${esc(c.message_id||'')}">🔍 ${cit}</span>
             <div style="font-size:13.5px; color:var(--color-ink); margin-top:4px; font-style:italic; background:var(--color-canvas); padding:8px 12px; border-radius:8px;">"${esc(c.excerpt||'')}"</div>
+            ${c.dialogue_context && c.dialogue_context.includes('\n') ? `<details style="margin-top:6px;"><summary style="cursor:pointer; font-size:11.5px; color:var(--color-muted);">Ver contexto conversacional (${c.dialogue_context.split('\n').length} mensajes)</summary><div style="font-size:11.5px; background:var(--color-surface); padding:8px 12px; border-radius:6px; margin-top:4px; white-space:pre-wrap; font-family:monospace; line-height:1.4;">${esc(c.dialogue_context)}</div></details>` : ''}
           </div>
           <button type="button" class="btn-chip btn-inspect-evidence" data-idx="${i}" style="margin-top:2px; white-space:nowrap;">Inspeccionar</button>
         </div>`;
@@ -211,6 +231,14 @@ function renderAskAnswer(j){
     btn.addEventListener('click', ()=>{
       const idx=Number(btn.getAttribute('data-idx'));
       if(citations[idx]) showEvidenceDrawer(citations[idx]);
+    });
+  });
+
+  container.querySelectorAll('.btn-inline-citation').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const mid=btn.getAttribute('data-mid');
+      const found=citations.find(c=>c.message_id===mid);
+      if(found) showEvidenceDrawer(found);
     });
   });
 
@@ -872,7 +900,9 @@ if(askForm) askForm.addEventListener('submit', async e=>{
   e.preventDefault();
   const question=qs('ask-question').value; const about=qs('ask-about').value.trim()||null;
   if(!question.trim()){ toast(qs('ask-answer'),'Escribí una pregunta','error'); return; }
-  const payload={question, slug:currentSlug, provider:'local', limit:5, evidence_budget:2500};
+  const provSel=qs('ask-provider');
+  const provider=(provSel?provSel.value:'auto')||'auto';
+  const payload={question, slug:currentSlug, provider, limit:10, evidence_budget:5000};
   if(about) payload.about=about;
   const btn=askForm.querySelector('button[type=submit]');
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="loading"></span> Consultando memoria...'; }
