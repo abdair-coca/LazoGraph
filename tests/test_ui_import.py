@@ -185,6 +185,11 @@ def test_progress_endpoint_polling(tmp_path, monkeypatch):
         )
     token = r.json()["token"]
 
+    # Preview token is queryable immediately
+    r_pre = client.get(f"/api/progress/{token}")
+    assert r_pre.status_code == 200
+    assert r_pre.json()["status"] == "pending"
+
     r_apply = client.post("/api/import/apply", json={"token": token})
     assert r_apply.status_code == 200
     job_id = r_apply.json().get("job_id")
@@ -195,4 +200,9 @@ def test_progress_endpoint_polling(tmp_path, monkeypatch):
     pdata = r_prog.json()
     assert pdata["status"] == "done"
     assert pdata["pct"] == 100
+
+    # Preview token still queryable after apply
+    r_prog_token = client.get(f"/api/progress/{token}")
+    assert r_prog_token.status_code == 200
+    assert r_prog_token.json()["status"] == "done"
 
